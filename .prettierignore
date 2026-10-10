@@ -1,0 +1,6 @@
+dist/
+artifacts/
+node_modules/
+# Saved Fidelity reference material is evidence, not authored source.
+docs/fidelity/
+package-lock.json

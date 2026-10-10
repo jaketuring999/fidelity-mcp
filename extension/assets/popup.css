@@ -1,0 +1,35 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+body {
+  width: 290px;
+  padding: 18px;
+  margin: 0;
+}
+h1 {
+  font-size: 20px;
+  margin: 0 0 12px;
+}
+p {
+  line-height: 1.5;
+}
+button {
+  display: block;
+  width: 100%;
+  margin: 9px 0;
+  padding: 10px;
+  border: 1px solid #888;
+  border-radius: 7px;
+  font: inherit;
+  cursor: pointer;
+}
+button:first-of-type {
+  background: #145b36;
+  color: white;
+  border-color: #145b36;
+}
+.note {
+  font-size: 12px;
+  opacity: 0.8;
+}

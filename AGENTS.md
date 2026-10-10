@@ -1,0 +1,2 @@
+- Highly prefer E2E tests as the sole testing mechanism. Use them to verify complex features work. At the end of E2E tests, produce a verifiable and repeatable artifact.
+- Before adding Fidelity adapters, read `docs/fidelity/README.md` and use the saved raw sources, GraphQL documents, and endpoint catalog for offline discovery. Update the reference with new validated contracts. Use live Chrome inspection when the saved evidence is insufficient or a new adapter needs validation.
