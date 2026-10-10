@@ -60,9 +60,19 @@ Use this extension-free path for current prototype development. It reuses your e
 4. Click **Allow** in Chrome's **Allow remote debugging?** connection prompt. Chrome may request approval again for a new connection.
 5. Configure your MCP client with `http://127.0.0.1:3444/mcp`, then connect. Sign in and complete 2FA directly in Fidelity if prompted. The bridge reuses a portfolio tab or opens one during authorization.
 
+Starting the server attaches to Chrome but does not open Fidelity. The MCP client must begin authorization before the bridge opens or focuses the Fidelity tab. If the client already has valid MCP credentials, it may skip authorization; open and sign in to Fidelity in the connected Chrome window if a portfolio read requires it.
+
+If Cursor stays at **Connecting…** or authentication times out after changing the server URL or port, open **Customize → MCPs → fidelity**, disable the source, then enable it again. Once it shows **Needs Authentication**, click **Authenticate** and complete Fidelity sign-in in Chrome. In a live recovery, Cursor kept trying the previous port and its Reload/Authenticate actions did not start a new connection until the source was toggled.
+
 Chrome's setting grants browser-wide control, including access to saved data, cookies and site data, and navigation. Enable it only for trusted local apps. The Fidelity MCP interface still exposes only its three read-only portfolio tools. No extension, native-host registration, or separate browser profile is required. Stopping this server disconnects it and leaves Chrome and its tabs open. Disable the setting when you no longer want apps to request debugging access. See [Chrome's setup documentation](https://developer.chrome.com/blog/chrome-devtools-mcp-debug-your-browser-session) for the setting and approval flow.
 
 If Chrome shows **Server running at: starting…** and attachment cannot find its endpoint, check whether Chrome was launched with `--remote-debugging-port` or `--remote-debugging-pipe`. Those legacy flags take precedence over the approval mode and are restricted for the ordinary Chrome profile. Save unfinished work, fully quit Chrome, then reopen it normally from your app launcher. A page reload does not remove process launch flags. Re-enable remote debugging if needed, then restart the bridge and approve Chrome's connection prompt.
+
+## Connect the local Codex desktop app
+
+With the server running, open **Settings → Plugins → MCPs → Add → Add MCP server** in the desktop app. Set the name to `fidelity`, choose **Streamable HTTP**, and enter `http://127.0.0.1:3444/mcp` (use your actual `MCP_PORT`). Leave bearer-token and header fields empty, save, then select **Authenticate** with automatic OAuth client registration. Complete Fidelity sign-in in Chrome if prompted.
+
+This local MCP setup was verified with Chrome debugging, OAuth login, and discovery of all three tools. It is saved in `~/.codex/config.toml`. A cloud connector cannot reach the server's loopback URL.
 
 ## Switch between extension and Chrome debugging
 

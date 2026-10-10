@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
+import { request } from 'node:http';
 import { BrowserBridge } from '../../dist/bridge/browser-bridge.js';
 import { createServer } from '../../dist/server/mcp.js';
+import { startHttpServer } from '../../dist/server/http.js';
 import { chromium, type BrowserContext } from 'playwright';
 
 for (const attach of [false, true])
@@ -39,6 +41,7 @@ for (const attach of [false, true])
         ...(cdpEndpoint ? { cdpEndpoint } : {}),
       });
       const mcp = createServer(bridge);
+      let http: Awaited<ReturnType<typeof startHttpServer>> | undefined;
       let mode = 'normal';
       const calls: string[][] = [];
       let blocked = 0;
@@ -164,12 +167,130 @@ for (const attach of [false, true])
                     sym: { name: 'TEST', desc: 'Synthetic holding' },
                     qty: { val: '1.12345678' },
                     curVal: { val: '13.87' },
+                    totGLStk: {
+                      top: {
+                        val:
+                          mode === 'position-placeholders'
+                            ? '--'
+                            : mode === 'invalid-number'
+                              ? 'NaN'
+                              : '-1.25',
+                      },
+                    },
+                    cstBasStk: { top: { val: mode === 'position-placeholders' ? 'n/a' : '15.12' } },
                   },
                 ]),
               };
           await route.fulfill({ contentType: 'application/json', body: JSON.stringify(payload) });
         });
-        await bridge.connectFidelity(new AbortController().signal);
+        // Exercise Cursor's hosted callback through the actual browser bridge,
+        // including CDP attachment, rather than extension-only readiness.
+        http = await startHttpServer(mcp, {
+          base,
+          port: 0,
+          connectFidelity: (signal) => bridge.connectFidelity(signal),
+        });
+        const origin = new URL(http.url).origin;
+        const callback = 'https://www.cursor.com/agents/mcp/oauth/callback';
+        const discovery = await (
+          await fetch(`${origin}/.well-known/oauth-authorization-server`)
+        ).json();
+        const registration = await fetch(discovery.registration_endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_name: 'Cursor browser E2E',
+            redirect_uris: [callback, 'http://127.0.0.1:8090/callback'],
+            grant_types: ['authorization_code', 'refresh_token'],
+            response_types: ['code'],
+            token_endpoint_auth_method: 'none',
+          }),
+        });
+        assert.equal(registration.status, 201);
+        const client = await registration.json();
+        const verifier = randomBytes(32).toString('base64url');
+        const authorize = new URL(discovery.authorization_endpoint);
+        authorize.search = new URLSearchParams({
+          response_type: 'code',
+          client_id: client.client_id,
+          redirect_uri: callback,
+          scope: 'fidelity:portfolio:read offline_access',
+          state: 'browser-e2e-state',
+          resource: http.url,
+          code_challenge: createHash('sha256').update(verifier).digest('base64url'),
+          code_challenge_method: 'S256',
+        }).toString();
+        // Node fetch sends sec-fetch-mode: cors, which requests a JSON redirect.
+        // A navigation-style HTTP request exercises the browser's 302 path.
+        const authorization = await new Promise<{ status: number; location: string }>(
+          (resolve, reject) => {
+            const req = request(authorize, (res) => {
+              res.resume();
+              res.once('end', () =>
+                resolve({ status: res.statusCode!, location: res.headers.location! }),
+              );
+              res.once('error', reject);
+            });
+            req.once('error', reject);
+            req.end();
+          },
+        );
+        assert.equal(authorization.status, 302);
+        const connection = await fetch(new URL(authorization.location, origin), {
+          redirect: 'manual',
+        });
+        assert.equal(connection.status, 302);
+        const redirect = new URL(connection.headers.get('location')!);
+        assert.equal(redirect.origin + redirect.pathname, callback);
+        assert.equal(redirect.searchParams.get('state'), 'browser-e2e-state');
+        assert.equal(redirect.searchParams.get('iss'), origin);
+        assert.equal(redirect.searchParams.get('error'), null);
+        assert.ok(redirect.searchParams.get('code'));
+        const tokenResponse = await fetch(discovery.token_endpoint, {
+          method: 'POST',
+          body: new URLSearchParams({
+            grant_type: 'authorization_code',
+            client_id: client.client_id,
+            redirect_uri: callback,
+            code: redirect.searchParams.get('code')!,
+            code_verifier: verifier,
+            resource: http.url,
+          }),
+        });
+        assert.equal(tokenResponse.status, 200);
+        const tokens = await tokenResponse.json();
+        assert.ok(tokens.access_token);
+        assert.ok(tokens.refresh_token);
+        const listed = await fetch(http.url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${tokens.access_token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json, text/event-stream',
+            'MCP-Protocol-Version': '2026-07-28',
+            'Mcp-Method': 'tools/list',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/list',
+            params: {
+              _meta: {
+                'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+                'io.modelcontextprotocol/clientCapabilities': {},
+                'io.modelcontextprotocol/clientInfo': { name: 'browser-e2e', version: '1' },
+              },
+            },
+          }),
+        });
+        assert.equal(listed.status, 200);
+        const listedBody = await listed.text();
+        for (const name of [
+          'fidelity_list_accounts',
+          'fidelity_get_account_balance',
+          'fidelity_get_positions',
+        ])
+          assert.ok(listedBody.includes(name));
         const accounts = (await tool('fidelity_list_accounts')).structuredContent.accounts;
         assert.equal(accounts.length, 2);
         assert.equal(accounts[0].last4, accounts[1].last4);
@@ -182,6 +303,21 @@ for (const attach of [false, true])
         assert.deepEqual(calls.at(-1), ['TEST1234']);
         const holdings = (await tool('fidelity_get_positions', { accountId })).structuredContent;
         assert.equal(holdings.accounts[0].positions[0].quantity, '1.12345678');
+        assert.equal(holdings.accounts[0].positions[0].totalGainLoss, '-1.25');
+        mode = 'position-placeholders';
+        for (const args of [{}, { accountId }]) {
+          const result = await tool('fidelity_get_positions', args);
+          assert.equal(result.isError, undefined);
+          assert.equal(result.structuredContent.accounts.length, 'accountId' in args ? 1 : 2);
+          for (const account of result.structuredContent.accounts) {
+            const holding = account.positions[0];
+            assert.equal(holding.currentValue, '13.87');
+            assert.equal(holding.quantity, '1.12345678');
+            assert.equal(holding.totalGainLoss, undefined);
+            assert.equal(holding.costBasis, undefined);
+          }
+        }
+        mode = 'normal';
         const before = calls.length;
         assert.match(
           JSON.stringify(
@@ -191,7 +327,7 @@ for (const attach of [false, true])
         );
         assert.equal(calls.length, before);
         assert.ok((await tool('fidelity_get_positions', { accountId: 'TEST1234' })).error);
-        for (const failure of ['incomplete', 'expired']) {
+        for (const failure of ['incomplete', 'expired', 'invalid-number']) {
           mode = failure;
           const result = await tool('fidelity_get_positions');
           assert.equal(result.isError, true);
@@ -288,8 +424,10 @@ for (const attach of [false, true])
               runtime: `real headless Chromium; ${attach ? 'CDP attach/detach; existing browser survives' : 'owned browser'}; MCP handler; bundled adapter; intercepted synthetic Fidelity HTTP; no extension/native host`,
               liveFidelityValidated: false,
               checks: [
+                'Cursor hosted OAuth callback through browser readiness, PKCE token exchange and authenticated HTTP tools/list',
                 'readiness',
                 'all and single account reads',
+                'Optional -- and n/a measures omitted without losing holdings; malformed optional numbers rejected',
                 'gzip and runtime CSRF bootstrap',
                 'opaque collision-safe account references',
                 'precision',
@@ -308,6 +446,7 @@ for (const attach of [false, true])
           ) + '\n',
         );
       } finally {
+        await http?.close();
         await bridge.close();
         await mcp.close();
         await owner?.close();

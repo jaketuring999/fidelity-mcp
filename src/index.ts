@@ -91,7 +91,7 @@ if (command === 'native-host') {
       },
     });
     console.log(
-      `Fidelity MCP listening: ${http.url}\nBridge: ${mode === 'browser-attach' ? 'chrome-debugging' : mode} (${config.source})\nTransport: stateless Streamable HTTP\nAdd this URL to your local OAuth-capable MCP client. Chrome opens Fidelity automatically.`,
+      `Fidelity MCP listening: ${http.url}\nBridge: ${mode === 'browser-attach' ? 'chrome-debugging' : mode} (${config.source})\nTransport: stateless Streamable HTTP\nAdd this URL to your local OAuth-capable MCP client and connect. During client authorization, Chrome opens or focuses Fidelity for sign-in and 2FA if needed. Starting the server alone does not open Fidelity.`,
     );
   } catch (error) {
     console.error(

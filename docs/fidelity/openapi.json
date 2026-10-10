@@ -709,7 +709,7 @@
                     "type": "number"
                   }
                 ],
-                "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                "description": "Optional provider decimal value. Adapter preserves numeric precision and omits null, missing, -- and n/a values; other malformed values fail."
               },
               "disp": {
                 "type": "string"
@@ -758,7 +758,7 @@
                         "type": "number"
                       }
                     ],
-                    "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                    "description": "Optional provider decimal value. Adapter preserves numeric precision and omits null, missing, -- and n/a values; other malformed values fail."
                   },
                   "disp": {
                     "type": "string"
@@ -811,7 +811,7 @@
                         "type": "number"
                       }
                     ],
-                    "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                    "description": "Optional provider decimal value. Adapter preserves numeric precision and omits null, missing, -- and n/a values; other malformed values fail."
                   },
                   "disp": {
                     "type": "string"
@@ -864,7 +864,7 @@
                         "type": "number"
                       }
                     ],
-                    "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                    "description": "Optional provider decimal value. Adapter preserves numeric precision and omits null, missing, -- and n/a values; other malformed values fail."
                   },
                   "disp": {
                     "type": "string"
@@ -917,7 +917,7 @@
                         "type": "number"
                       }
                     ],
-                    "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                    "description": "Optional provider decimal value. Adapter preserves numeric precision and omits null, missing, -- and n/a values; other malformed values fail."
                   },
                   "disp": {
                     "type": "string"
