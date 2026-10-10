@@ -7,6 +7,9 @@ import {
   accountsResultSchema,
   positionsResultSchema,
   accountIdSchema,
+  taxLotsResultSchema,
+  performanceResultSchema,
+  balanceHistoryResultSchema,
 } from '../src/bridge/protocol.js';
 import {
   auth,
@@ -166,6 +169,9 @@ try {
       'fidelity_list_accounts',
       'fidelity_get_account_balance',
       'fidelity_get_positions',
+      'fidelity_get_tax_lots',
+      'fidelity_get_performance',
+      'fidelity_get_balance_history',
     ])
   )
     throw new Error(
@@ -199,6 +205,7 @@ try {
     selectedBalance.data.accounts[0]!.accountId !== accountId
   )
     throw new Error('Single-account balance check failed.');
+  let allPositions: z.infer<typeof positionsResultSchema> | undefined;
   for (const args of [{}, { accountId }]) {
     const result = await client.callTool({ name: 'fidelity_get_positions', arguments: args });
     const parsed = positionsResultSchema
@@ -210,6 +217,7 @@ try {
       })
       .safeParse(result.structuredContent);
     if (result.isError || !parsed.success) throw new Error('Live positions check failed.');
+    if (!('accountId' in args)) allPositions = parsed.data;
     const expected =
       'accountId' in args ? [accountId] : listed.data.accounts.map((a) => a.accountId);
     if (
@@ -217,6 +225,48 @@ try {
       JSON.stringify(expected.sort())
     )
       throw new Error('Live positions account scope mismatch.');
+  }
+  const selections = [{}, ...listed.data.accounts.map((a) => ({ accountId: a.accountId }))];
+  const checkScope = (accounts: Array<{ accountId: string }>, args: { accountId?: string }) => {
+    const expected = args.accountId
+      ? [args.accountId]
+      : listed.data.accounts.map((a) => a.accountId);
+    if (JSON.stringify(accounts.map((a) => a.accountId).sort()) !== JSON.stringify(expected.sort()))
+      throw new Error('Advanced live read account scope mismatch.');
+  };
+  for (const args of selections) {
+    const result = await client.callTool({ name: 'fidelity_get_performance', arguments: args });
+    const parsed = performanceResultSchema.passthrough().safeParse(result.structuredContent);
+    if (result.isError || !parsed.success) throw new Error('Live performance schema check failed.');
+    checkScope(parsed.data.accounts, args);
+    for (const range of ['1M', 'YTD', '1Y', '3Y'] as const) {
+      const history = await client.callTool({
+        name: 'fidelity_get_balance_history',
+        arguments: { ...args, range },
+      });
+      const parsedHistory = balanceHistoryResultSchema
+        .passthrough()
+        .safeParse(history.structuredContent);
+      if (history.isError || !parsedHistory.success || parsedHistory.data.range !== range)
+        throw new Error('Live balance history schema/range check failed.');
+      checkScope(parsedHistory.data.accounts, args);
+    }
+  }
+  let availableLotHoldings = 0;
+  for (const account of allPositions!.accounts) {
+    for (const symbol of new Set(account.positions.map((p) => p.symbol))) {
+      const result = await client.callTool({
+        name: 'fidelity_get_tax_lots',
+        arguments: { accountId: account.accountId, symbol },
+      });
+      const parsed = taxLotsResultSchema.passthrough().safeParse(result.structuredContent);
+      if (result.isError || !parsed.success) throw new Error('Live tax-lot schema check failed.');
+      checkScope(parsed.data.accounts, { accountId: account.accountId });
+      for (const holding of parsed.data.accounts[0]!.positions) {
+        if (holding.symbol !== symbol) throw new Error('Live tax-lot security scope mismatch.');
+        if (holding.status === 'available') availableLotHoldings++;
+      }
+    }
   }
   const previousRefresh = tokens?.refresh_token;
   await auth(provider, { serverUrl });
@@ -259,6 +309,13 @@ try {
         accounts: 'real Fidelity context; identifiers omitted',
         balance: 'real Fidelity internal API; all and single account; values omitted',
         positions: 'real Fidelity internal API; all and single account; values omitted',
+        performance:
+          'Canonical schemas; all and every single account; calculation metadata and unavailable periods preserved; values omitted',
+        balanceHistory:
+          'Canonical schemas; all four ranges; all and every single account; values omitted',
+        taxLots: { everyHeldSymbolChecked: true, availableLotHoldings, valuesOmitted: true },
+        remoteDebugging:
+          'Uses the running MCP server; this check never opens a separate Chrome debugging connection',
         refreshRotation: true,
         testGrantRevoked: true,
       },
@@ -267,7 +324,7 @@ try {
     ) + '\n',
   );
   console.log(
-    'Live automatic OAuth callback, accounts, all/single-account balances and positions, and token refresh passed. Financial values omitted.',
+    'Live OAuth, six tools, all/single-account scope, all history ranges, every held symbol tax lots, typed responses, and token refresh passed. Financial values omitted.',
   );
 } finally {
   clearTimeout(timeout);

@@ -1,6 +1,5 @@
 import { endianness } from 'node:os';
-
-const MAX_MESSAGE_BYTES = 256 * 1024;
+import { MAX_MESSAGE_BYTES } from './protocol.js';
 
 export function encodeMessage(message: unknown): Buffer {
   const body = Buffer.from(JSON.stringify(message), 'utf8');

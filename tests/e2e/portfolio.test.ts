@@ -1,3 +1,4 @@
+import { advancedFixture, verifyAdvancedTools } from './advanced-fixtures.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
@@ -14,7 +15,7 @@ import { writeRegistration } from '../../src/runtime/setup.js';
 import { encodeMessage, MessageDecoder } from '../../src/bridge/framing.js';
 
 test(
-  'three MCP tools → real native host → bundled worker → serialized adapter: automatic sign-in/recovery, account scope, masking and failures',
+  'six MCP tools → real native host → bundled worker → serialized adapter: automatic sign-in/recovery, account scope, masking and failures',
   { timeout: 30_000 },
   async () => {
     const base = await mkdtemp(join(tmpdir(), 'fidelity-portfolio-e2e-'));
@@ -41,23 +42,7 @@ test(
       },
       { acctNum: 'EXTN6789', acctType: 'External', preferenceDetail: { name: 'External' } },
     ];
-    let mode:
-      | 'normal'
-      | 'expired'
-      | 'unavailable'
-      | 'no-context'
-      | 'incomplete'
-      | 'wrong-account'
-      | 'missing-balance'
-      | 'negative-balance'
-      | 'invalid-number'
-      | 'position-placeholders'
-      | 'required-placeholder'
-      | 'empty-positions'
-      | 'stale-snapshot'
-      | 'duplicate-snapshot'
-      | 'wrong-scope-snapshot'
-      | 'unknown-row' = 'normal';
+    let mode = 'normal';
     const calls: Array<{ operation: string; ids: string[] }> = [];
     const frames: unknown[] = [];
     const storage: Record<string, unknown> = { selectedTab: 999 };
@@ -119,6 +104,12 @@ test(
           return new Response(
             '<script>window.posweb={"ctoken":"synthetic-csrf","user":"synthetic-customer","virtualmode":"N","virtualpwe":"multiple"};</script>',
           );
+        const advanced = advancedFixture(
+          url,
+          init?.body ? JSON.parse(String(init.body)) : {},
+          mode,
+        );
+        if (advanced !== undefined) return Response.json(advanced);
         assert.equal(init?.method, 'POST');
         assert.equal(init?.credentials, 'include');
         assert.equal((init?.headers as Record<string, string>)['X-CSRF-Token'], 'synthetic-csrf');
@@ -176,7 +167,10 @@ test(
                         curVal: { val: '13.87' },
                         cstBasStk: { top: { val: null } },
                         todGLStk: { top: { val: '-0.10' } },
-                        meta: { holdingType: 'Margin' },
+                        meta: {
+                          holdingType: 'Margin',
+                          isEligibleForLots: mode !== 'ineligible-lots',
+                        },
                       },
                     ]),
                 {
@@ -296,6 +290,7 @@ test(
     });
     runInNewContext(bundle.outputFiles[0]!.text, {
       chrome,
+      TextEncoder,
       crypto: webcrypto,
       URL,
       Date,
@@ -401,7 +396,14 @@ test(
       assert.ok(listed.tools, JSON.stringify(listed));
       assert.deepEqual(
         listed.tools.map((t: any) => t.name),
-        ['fidelity_list_accounts', 'fidelity_get_account_balance', 'fidelity_get_positions'],
+        [
+          'fidelity_list_accounts',
+          'fidelity_get_account_balance',
+          'fidelity_get_positions',
+          'fidelity_get_tax_lots',
+          'fidelity_get_performance',
+          'fidelity_get_balance_history',
+        ],
       );
       const accounts = (await tool('fidelity_list_accounts')).structuredContent.accounts;
       assert.equal(accounts.length, 2);
@@ -441,6 +443,9 @@ test(
         calls.slice(firstRead, firstRead + 5).map((c) => c.ids.length),
         [2, 1, 1, 2, 1],
       );
+      await verifyAdvancedTools(tool, accountId, (value) => {
+        mode = value;
+      });
       const routeCalls = calls.length;
       const originalUrl = tab.url;
       for (const url of [
@@ -576,7 +581,7 @@ test(
               'Same-tab login/2FA wait completes through the real native-host bridge.',
               'Readiness returns only connected:true; no approval tab or financial data.',
               'Closed selected tab falls back to the most recent Fidelity tab without navigation or reference changes.',
-              'Exactly three read-only tools.',
+              'Exactly six read-only tools; advanced reads validate formatted lot fields, all pages, performance calculation and unavailable periods, all history ranges, and reject incomplete/malformed responses.',
               'All supported accounts independent of current UI account selection.',
               'One account filters provider requests and results.',
               'Opaque references disambiguate matching last-four digits.',

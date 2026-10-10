@@ -11,7 +11,7 @@ Read this before changing a Fidelity adapter. This is an unofficial, partial rec
 | [examples.json](examples.json) | Synthetic decoded and wire requests/responses; no customer captures |
 | [endpoint-catalog.json](endpoint-catalog.json) | Validated reads and source-discovered route candidates with evidence locations |
 
-The implemented tools are `fidelity_list_accounts`, `fidelity_get_account_balance`, and `fidelity_get_positions`. Account listing uses `PortSumContainer.PicoService.getPersonContext()`; it is not an invented REST endpoint. Balances and positions accept an optional opaque `accountId`. Omitting it reads all supported visible brokerage accounts, including brokerage IRAs.
+The implemented tools are `fidelity_list_accounts`, `fidelity_get_account_balance`, `fidelity_get_positions`, `fidelity_get_tax_lots`, `fidelity_get_performance`, and `fidelity_get_balance_history`. Account listing uses `PortSumContainer.PicoService.getPersonContext()`; it is not an invented REST endpoint. Balances, positions, performance and history accept an optional opaque `accountId`. Tax lots require an accountId and a held symbol. Omitting it reads all supported visible brokerage accounts, including brokerage IRAs.
 
 The schemas document consumed fields and permit additional provider properties. They do not establish support for other account types or adjacent services. Source-discovered routes have unvalidated request/response contracts and are not implemented tools.
 

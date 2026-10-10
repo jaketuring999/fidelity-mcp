@@ -2,10 +2,18 @@ import { FastMCP, ToolResult } from '@prefecthq/fastmcp-ts/server';
 import { z } from 'zod';
 import { FidelityError } from '../domain/errors.js';
 import type { PortfolioReader } from '../bridge/portfolio-reader.js';
-import { accountIdSchema } from '../bridge/protocol.js';
+import { accountIdSchema, historyRangeSchema, symbolSchema } from '../bridge/protocol.js';
 
 export function createServer(
-  session: Pick<PortfolioReader, 'listAccounts' | 'getBalance' | 'getPositions'>,
+  session: Pick<
+    PortfolioReader,
+    | 'listAccounts'
+    | 'getBalance'
+    | 'getPositions'
+    | 'getTaxLots'
+    | 'getPerformance'
+    | 'getBalanceHistory'
+  >,
 ): FastMCP {
   const server = new FastMCP({ name: 'fidelity-mcp', version: '0.2.0', logLevel: 'error' });
   const annotations = {
@@ -76,6 +84,39 @@ export function createServer(
       annotations,
     },
     async ({ accountId }) => guarded(() => session.getPositions(accountId)),
+  );
+  server.tool(
+    {
+      name: 'fidelity_get_tax_lots',
+      title: 'Get Fidelity open tax lots',
+      description:
+        'Read all open tax-lot pages for one held symbol in one supported brokerage account. Requires an opaque accountId from fidelity_list_accounts and a symbol from fidelity_get_positions. Keeps cash and margin holdings separate. Returns acquisition/holding-period dates, adjusted cost basis, gains and wash-sale flags when supplied; explicitly marks ineligible holdings. Percentages are percentage points, unavailable measures are omitted. No lot reassignment or trading.',
+      input: z.object({ accountId: accountIdSchema, symbol: symbolSchema }).strict(),
+      annotations,
+    },
+    async ({ accountId, symbol }) => guarded(() => session.getTaxLots(accountId, symbol)),
+  );
+  server.tool(
+    {
+      name: 'fidelity_get_performance',
+      title: 'Get Fidelity account performance',
+      description:
+        'Read Fidelity cumulative time-weighted (TW), pretax, net returns for 1M, YTD, 1Y and 3Y, separately for each selected brokerage account. Omit accountId for all supported visible accounts. Preserves provider as-of/inception dates and identifies unavailable periods. Returns decimal strings in percent units (5 means 5%, not 500%); no averaging of account returns or inferred benchmark. Retrieval time is not the performance reporting date.',
+      input: selection,
+      annotations,
+    },
+    async ({ accountId }) => guarded(() => session.getPerformance(accountId)),
+  );
+  server.tool(
+    {
+      name: 'fidelity_get_balance_history',
+      title: 'Get Fidelity account balance history',
+      description:
+        'Read dated historical account values, separately per supported visible brokerage account. Omit accountId for all accounts; range is 1M, YTD, 1Y or 3Y (default 1Y). Values are USD decimal strings; dates are YYYY-MM-DD, sorted ascending. Fidelity historical values use overnight pricing and include deposits/withdrawals, so balance changes are not investment returns. Unavailable or incomplete history fails explicitly.',
+      input: selection.extend({ range: historyRangeSchema.default('1Y') }),
+      annotations,
+    },
+    async ({ accountId, range }) => guarded(() => session.getBalanceHistory(accountId, range)),
   );
   return server;
 }

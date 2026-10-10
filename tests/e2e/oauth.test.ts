@@ -348,7 +348,14 @@ test(
       assert.equal(listed.headers['mcp-session-id'], undefined);
       assert.deepEqual(
         listed.json.result.tools.map((tool: { name: string }) => tool.name),
-        ['fidelity_list_accounts', 'fidelity_get_account_balance', 'fidelity_get_positions'],
+        [
+          'fidelity_list_accounts',
+          'fidelity_get_account_balance',
+          'fidelity_get_positions',
+          'fidelity_get_tax_lots',
+          'fidelity_get_performance',
+          'fidelity_get_balance_history',
+        ],
       );
       const balances = await call('tools/call', tokens.access_token, {
         name: 'fidelity_get_account_balance',
@@ -560,7 +567,14 @@ test(
         await sdkClient.connect(transport);
         assert.deepEqual(
           (await sdkClient.listTools()).tools.map((tool) => tool.name),
-          ['fidelity_list_accounts', 'fidelity_get_account_balance', 'fidelity_get_positions'],
+          [
+            'fidelity_list_accounts',
+            'fidelity_get_account_balance',
+            'fidelity_get_positions',
+            'fidelity_get_tax_lots',
+            'fidelity_get_performance',
+            'fidelity_get_balance_history',
+          ],
         );
         assert.equal(
           (await sdkClient.callTool({ name: 'fidelity_get_account_balance', arguments: {} }))

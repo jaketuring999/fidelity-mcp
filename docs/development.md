@@ -33,11 +33,11 @@ npm run format     # Apply formatting throughout the authored project.
 
 ## Verification
 
-| Suite         | Coverage                                                                                                                                                                                                                                               | Evidence                       |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
-| OAuth E2E     | Loopback HTTP, real compiled native-host subprocess, official MCP SDK, discovery, PKCE, callback policy, balance calls, refresh, restart, and revocation                                                                                               | `artifacts/oauth-e2e.json`     |
-| Portfolio E2E | Three MCP tools, real native host, built worker and serialized adapter under simulated Chrome; automatic connection, sign-in/tab recovery, account filters, collision-safe references, precision, cash semantics, gzip/bootstrap, masking and failures | `artifacts/portfolio-e2e.json` |
-| Package E2E   | Actual tarball and Git publication inventory, sensitive-file guards, extracted CLI, extension assets, and native registration in an isolated home                                                                                                      | `artifacts/package-e2e.json`   |
+| Suite         | Coverage                                                                                                                                                                                                                                             | Evidence                       |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| OAuth E2E     | Loopback HTTP, real compiled native-host subprocess, official MCP SDK, discovery, PKCE, callback policy, balance calls, refresh, restart, and revocation                                                                                             | `artifacts/oauth-e2e.json`     |
+| Portfolio E2E | Six MCP tools, real native host, built worker and serialized adapter under simulated Chrome; automatic connection, sign-in/tab recovery, account filters, collision-safe references, precision, cash semantics, gzip/bootstrap, masking and failures | `artifacts/portfolio-e2e.json` |
+| Package E2E   | Actual tarball and Git publication inventory, sensitive-file guards, extracted CLI, extension assets, and native registration in an isolated home                                                                                                    | `artifacts/package-e2e.json`   |
 
 The compiled CLI startup E2E runs with an isolated home and no Chrome debugging endpoint. It verifies a failing `--bridge chrome-debugging` startup exits with setup instructions and writes `artifacts/browser-startup-e2e.json`, without connecting to the user browser.
 
@@ -67,7 +67,7 @@ sanitized evidence to `artifacts/browser-live.json`.
 npm run check:live
 ```
 
-The check follows local OAuth redirects automatically; sign in to Fidelity in Chrome if prompted. It lists real accounts, reads balances and positions for all accounts and one account, verifies refresh rotation, revokes its test grant, and writes `artifacts/oauth-live.json` without credentials or financial values. `MCP_PORT` selects the same loopback port as the server. Live checks are manual and are outside CI.
+The check follows local OAuth redirects automatically; sign in to Fidelity in Chrome if prompted. It lists real accounts, reads balances/positions, checks performance for all and every single account, checks all four balance-history ranges for those scopes, reads tax lots for every held symbol, verifies canonical result schemas and refresh rotation, revokes its test grant, and writes `artifacts/oauth-live.json` without credentials or financial values. `MCP_PORT` selects the same loopback port as the server. Live checks are manual and are outside CI. This command uses the running server and does not create a Chrome debugging connection. Keep that server running between checks to avoid new Chrome approval prompts. Repeated `BrowserBridge.start()` calls reuse the same connection, including concurrent startup. Chrome can still require approval when a new server process attaches.
 
 ## Packaging
 

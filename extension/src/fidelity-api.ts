@@ -4,10 +4,17 @@ import type {
   AccountsSnapshot,
   AccountBalance,
   FailureCode,
+  ReadOptions,
 } from '../../src/bridge/protocol.js';
 
 type JsonObject = Record<string, any>;
-export type ReadOperation = 'list_accounts' | 'read_balance' | 'read_positions';
+export type ReadOperation =
+  | 'list_accounts'
+  | 'read_balance'
+  | 'read_positions'
+  | 'read_tax_lots'
+  | 'read_performance'
+  | 'read_balance_history';
 
 // This entire function is serialized into Chrome's MAIN world. Keep runtime
 // dependencies inside it; imported contracts above are erased by TypeScript.
@@ -16,13 +23,21 @@ export async function fetchFidelityPortfolio(
   accountId: string | null | undefined,
   salt: string,
   pagePolicy: FidelityPagePolicy,
+  options: ReadOptions = {},
 ): Promise<any> {
   const fail = (code: FailureCode) => ({ ok: false as const, code });
   if (location.origin !== pagePolicy.origin || location.pathname !== pagePolicy.portfolioPath)
     return fail('AUTHENTICATION_REQUIRED');
   if (
     !/^[a-f0-9]{64}$/.test(salt) ||
-    !['list_accounts', 'read_balance', 'read_positions'].includes(operation)
+    ![
+      'list_accounts',
+      'read_balance',
+      'read_positions',
+      'read_tax_lots',
+      'read_performance',
+      'read_balance_history',
+    ].includes(operation)
   )
     return fail('API_CONTEXT_UNAVAILABLE');
   const page = window as unknown as JsonObject;
@@ -75,6 +90,29 @@ export async function fetchFidelityPortfolio(
     if (!indexes.length) return fail(accountId ? 'ACCOUNT_NOT_FOUND' : 'PORTFOLIO_UNAVAILABLE');
     const assets = indexes.map(({ index }) => allAssets[index]!);
     const selectedInfos = indexes.map(({ info }) => info);
+    if (
+      !options ||
+      typeof options !== 'object' ||
+      Object.keys(options).some(
+        (key) =>
+          !(
+            operation === 'read_tax_lots'
+              ? ['symbol']
+              : operation === 'read_balance_history'
+                ? ['range']
+                : []
+          ).includes(key),
+      ) ||
+      (operation === 'read_tax_lots' &&
+        (!accountId ||
+          typeof options.symbol !== 'string' ||
+          !options.symbol.trim() ||
+          options.symbol.length > 100 ||
+          !/^[A-Za-z0-9 ./*^_$+-]+$/.test(options.symbol))) ||
+      (operation === 'read_balance_history' &&
+        !['1M', 'YTD', '1Y', '3Y'].includes(options.range ?? ''))
+    )
+      return fail('API_CONTEXT_UNAVAILABLE');
     const compress = async (value: unknown) => {
       const bytes = new TextEncoder().encode(JSON.stringify(value));
       const compressed = await new Response(
@@ -96,7 +134,240 @@ export async function fetchFidelityPortfolio(
       const [whole, fraction = ''] = text.split('.');
       return `${whole}.${fraction.padEnd(2, '0')}`;
     };
-    if (operation === 'read_positions') {
+    const changed = (): never => {
+      throw new Error('PORTFOLIO_RESPONSE_CHANGED');
+    };
+    const optionalDecimal = (value: unknown, formatted = false): string | undefined => {
+      if (
+        value === undefined ||
+        value === null ||
+        value === '--' ||
+        value === 'n/a' ||
+        value === ''
+      )
+        return undefined;
+      if (typeof value !== 'string' && typeof value !== 'number') return changed();
+      let text = String(value);
+      // Expand provider numeric exponents without rounding through toFixed.
+      if (typeof value === 'number' && /e/i.test(text)) {
+        const match = text.match(/^(-?)(\d+)(?:\.(\d+))?e([+-]?\d+)$/i);
+        if (!match) return changed();
+        const digits = match[2]! + (match[3] ?? '');
+        const point = match[2]!.length + Number(match[4]);
+        if (Math.abs(point) > 30) return changed();
+        text =
+          match[1] +
+          (point <= 0
+            ? '0.' + '0'.repeat(-point) + digits
+            : point >= digits.length
+              ? digits + '0'.repeat(point - digits.length)
+              : digits.slice(0, point) + '.' + digits.slice(point));
+      }
+      if (formatted) {
+        text = text.trim();
+        if (text.startsWith('(') && text.endsWith(')')) text = '-' + text.slice(1, -1);
+        text = text
+          .replace(/^([+-]?)\$/, '$1')
+          .replace(/^\+/, '')
+          .replace(/%$/, '');
+        if (!/^-?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,10})?$/.test(text)) return changed();
+        text = text.replace(/,/g, '');
+      }
+      return decimal(text, 10) ?? changed();
+    };
+    const calendarDate = (value: unknown): string => {
+      if (typeof value !== 'string') return changed();
+      let year: string, month: string, day: string;
+      const us = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      const named = value.match(
+        /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-(\d{2})-(\d{4})$/,
+      );
+      if (us) [month, day, year] = [us[1]!, us[2]!, us[3]!];
+      else if (iso) [year, month, day] = [iso[1]!, iso[2]!, iso[3]!];
+      else if (named) {
+        year = named[3]!;
+        day = named[2]!;
+        month = String(
+          [
+            'Jan',
+            'Feb',
+            'Mar',
+            'Apr',
+            'May',
+            'Jun',
+            'Jul',
+            'Aug',
+            'Sep',
+            'Oct',
+            'Nov',
+            'Dec',
+          ].indexOf(named[1]!) + 1,
+        ).padStart(2, '0');
+      } else return changed();
+      const result = `${year}-${month}-${day}`;
+      const date = new Date(result + 'T00:00:00Z');
+      if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== result)
+        return changed();
+      return result;
+    };
+    const optionalDate = (value: unknown) =>
+      value === undefined || value === null || value === '' || value === '--'
+        ? undefined
+        : calendarDate(value);
+    const readJson = async (
+      endpoint: string,
+      body: unknown,
+      headers: Record<string, string> = {},
+    ) => {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        credentials: 'include',
+        redirect: 'error',
+        cache: 'no-store',
+        signal,
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify(body),
+      });
+      if (response.status === 401 || response.status === 403)
+        throw new Error('READ_AUTHENTICATION_REQUIRED');
+      if (!response.ok) throw new Error('READ_UNAVAILABLE');
+      if (!response.headers.get('content-type')?.includes('json')) return changed();
+      try {
+        return await response.json();
+      } catch {
+        return changed();
+      }
+    };
+    if (operation === 'read_performance') {
+      const periods = ['1M', 'YTD', '1Y', '3Y'];
+      const data = await readJson(
+        'https://digital.fidelity.com/ftgw/digital/portfolio/api/GetAcctPerf',
+        {
+          entityDetails: assets.map((a) => ({
+            entityId: a.acctNum,
+            entityType: 'account',
+            sourceSystemId: 'ICS',
+          })),
+          isAggregate: false,
+          includePartialInMonthlyFreq: false,
+          performanceDetails: [
+            {
+              calculationTypes: ['TW'],
+              taxTypes: ['pretax'],
+              perfDetailType: 'cumulative',
+              returnTypes: ['NET'],
+              returnFrequency: ['D'],
+              historicalReturnsFrequency: [],
+              standardTimePeriods: periods,
+            },
+          ],
+        },
+      );
+      if (
+        data?.errors?.length ||
+        !Array.isArray(data?.perfDetails) ||
+        data.perfDetails.length !== assets.length
+      )
+        return fail('API_RESPONSE_CHANGED');
+      const seen = new Set<string>();
+      const accounts = data.perfDetails.map((item: JsonObject) => {
+        const index = assets.findIndex((a) => a.acctNum === item?.entityId);
+        if (index < 0 || seen.has(item.entityId) || item.entityType !== 'account') return changed();
+        seen.add(item.entityId);
+        if (!Array.isArray(item.cumulativePerfReturns) || item.cumulativePerfReturns.length > 1)
+          return changed();
+        const series = item.cumulativePerfReturns[0];
+        if (
+          series &&
+          (series.calculationType !== 'TW' ||
+            series.taxType !== 'pretax' ||
+            series.returnFrequency !== 'D' ||
+            !Array.isArray(series.returns) ||
+            series.returns.length > periods.length)
+        )
+          return changed();
+        const returned = new Set<string>();
+        const returns = (series?.returns ?? []).map((r: JsonObject) => {
+          if (!r || !periods.includes(r.period) || returned.has(r.period)) return changed();
+          returned.add(r.period);
+          const startDate = calendarDate(r.startDate),
+            endDate = calendarDate(r.endDate);
+          if (startDate > endDate) return changed();
+          return {
+            period: r.period,
+            startDate,
+            endDate,
+            netReturnPercent: optionalDecimal(r.netReturn),
+            benchmarkReturnPercent: optionalDecimal(r.benchmarkReturn),
+          };
+        });
+        return {
+          ...selectedInfos[index],
+          asOfDate: optionalDate(item.asOfDate),
+          dailyAsOfDate: optionalDate(item.dailyAsOfDate),
+          inceptionDate: optionalDate(series?.perfInceptionDate),
+          calculationType: 'TW',
+          taxType: 'pretax',
+          returnFrequency: 'D',
+          returns,
+          unavailablePeriods: periods.filter(
+            (period) =>
+              !returns.some(
+                (r: JsonObject) => r.period === period && r.netReturnPercent !== undefined,
+              ),
+          ),
+        };
+      });
+      return { ok: true, retrievedAt: new Date().toISOString(), accounts };
+    }
+    if (operation === 'read_balance_history') {
+      const accounts = [];
+      // The provider returns an aggregate with no account echo. Read each account
+      // separately so one unavailable account cannot silently disappear in a total.
+      for (let index = 0; index < assets.length; index++) {
+        const a = assets[index]!;
+        const data = await readJson(
+          'https://digital.fidelity.com/ftgw/digital/portfolio/api/BalanceHistory',
+          {
+            range: options.range,
+            acctList: [{ acctNum: a.acctNum, acctType: a.acctType, acctSubType: a.acctSubType }],
+          },
+        );
+        if (
+          data?.errors?.length ||
+          (data?.sysMsg !== null &&
+            data?.sysMsg !== undefined &&
+            (!Array.isArray(data.sysMsg) || data.sysMsg.length))
+        )
+          return fail('PORTFOLIO_UNAVAILABLE');
+        const detail = data?.balHistoryDetail;
+        if (
+          !Array.isArray(detail?.balances) ||
+          !detail.balances.length ||
+          detail.balances.length > 2000
+        )
+          return fail('API_RESPONSE_CHANGED');
+        const dates = new Set<string>();
+        const balances = detail.balances
+          .map((point: JsonObject) => {
+            const date = calendarDate(point?.date),
+              value = optionalDecimal(point?.value);
+            if (dates.has(date) || value === undefined) return changed();
+            dates.add(date);
+            return { date, value };
+          })
+          .sort((a: JsonObject, b: JsonObject) => a.date.localeCompare(b.date));
+        accounts.push({
+          ...selectedInfos[index],
+          balances,
+          requestedDateRangeGainLoss: optionalDecimal(detail.requestedDateRangeGainLoss),
+          requestedDateRangeGainLossPercent: optionalDecimal(detail.requestedDateRangeGainLossPct),
+        });
+      }
+      return { ok: true, retrievedAt: new Date().toISOString(), range: options.range, accounts };
+    }
+    if (operation === 'read_positions' || operation === 'read_tax_lots') {
       const endpoint = 'https://digital.fidelity.com/ftgw/digital/positions/poswebex/api/positions';
       let config = page.posweb;
       if (typeof config?.ctoken !== 'string' || typeof config?.user !== 'string') {
@@ -224,6 +495,137 @@ export async function fetchFidelityPortfolio(
         });
       }
       if (headers.size !== assets.length) return fail('API_RESPONSE_CHANGED');
+      if (operation === 'read_tax_lots') {
+        const rows = data.rowData.filter(
+          (row: JsonObject) =>
+            ['POSITION', 'POSITION_CORE'].includes(row.rowType) &&
+            row.sym?.name?.toUpperCase() === options.symbol!.trim().toUpperCase(),
+        );
+        if (!rows.length) return fail('POSITION_NOT_FOUND');
+        if (rows.length > 100) return fail('API_RESPONSE_CHANGED');
+        const positions = [];
+        for (const row of rows) {
+          const holdingType =
+            row.meta?.holdingType === 'Margin'
+              ? 'margin'
+              : row.meta?.holdingType === 'Cash' || row.rowType === 'POSITION_CORE'
+                ? 'cash'
+                : 'unknown';
+          if (row.meta?.isEligibleForLots !== true) {
+            positions.push({ symbol: row.sym.name, holdingType, status: 'not_eligible', lots: [] });
+            continue;
+          }
+          const lots: JsonObject[] = [];
+          const seenLots = new Set<number>();
+          let pageNum = 1,
+            totalLots: number | undefined,
+            lastPage: number | undefined;
+          for (;;) {
+            const result = await readJson(
+              'https://digital.fidelity.com/ftgw/digital/positions/poswebex/api/openlots-json',
+              {
+                acctNum: row.actNum,
+                acctType: 'Brokerage',
+                cusip: row.sym.cusip ?? '',
+                symbol: row.sym.name,
+                holdingType: row.meta.holdingType,
+                isUnadjusted: false,
+                isCostBasisAdjusted: ['Bond', 'Certificate Of Deposit'].includes(
+                  row.meta.securityType,
+                ),
+                pageNum,
+                pageSize: 250,
+                returnBasketTaxLotDetail: false,
+                slvCd: row.meta.slvCd,
+                positionDetail: {
+                  lastPrice: row.lstPrcUsd?.val ?? row.lstPrc?.val ?? row.lstPrStk?.top?.val ?? '',
+                  securityType: row.meta.securityType ?? '',
+                  currentValue: row.curVal.val,
+                  quantity: row.qty?.val ?? '',
+                  costBasis: row.meta.cstbasType ?? '',
+                  isCostBasisEditable: row.meta.isCostBasisEditable ?? false,
+                  isNotQuotable: row.meta.isNotQuotable ?? false,
+                  isCrypto: false,
+                },
+              },
+              {
+                'X-CSRF-Token': config.ctoken,
+                'Preset-View': 'StackOverView',
+                whereUsed: location.href,
+                virtualmode: config.virtualmode ?? 'N',
+                virtualpwe: config.virtualpwe ?? 'multiple',
+              },
+            );
+            const pagination = result?.pagination;
+            if (
+              !Array.isArray(result?.rows) ||
+              result.rows.length > 250 ||
+              !pagination ||
+              !Number.isSafeInteger(pagination.totalLots) ||
+              pagination.totalLots < 0 ||
+              pagination.totalLots > 10000 ||
+              pagination.currentPage !== pageNum ||
+              !Number.isSafeInteger(pagination.lastPage) ||
+              pagination.lastPage < 1 ||
+              pagination.lastPage > 40 ||
+              !Number.isSafeInteger(pagination.nextPage) ||
+              (totalLots !== undefined &&
+                (pagination.totalLots !== totalLots || pagination.lastPage !== lastPage))
+            )
+              return fail('API_RESPONSE_CHANGED');
+            totalLots = pagination.totalLots;
+            lastPage = pagination.lastPage;
+            for (const lot of result.rows) {
+              if (
+                !lot ||
+                !Number.isSafeInteger(lot.index) ||
+                lot.index < 0 ||
+                seenLots.has(lot.index) ||
+                typeof lot.isWashedSale !== 'boolean' ||
+                typeof lot.isNearingLongTerm !== 'boolean'
+              )
+                return fail('API_RESPONSE_CHANGED');
+              seenLots.add(lot.index);
+              const dateAcquired =
+                lot.dateAcquired === 'Various' ? undefined : optionalDate(lot.dateAcquired);
+              if (!['Short', 'Long', '--', 'Unknown', '', null, undefined].includes(lot.term))
+                return fail('API_RESPONSE_CHANGED');
+              lots.push({
+                lotNumber: lot.index,
+                dateAcquired,
+                acquisitionDateStatus: dateAcquired
+                  ? 'known'
+                  : lot.dateAcquired === 'Various'
+                    ? 'various'
+                    : 'unavailable',
+                holdingPeriodDate: optionalDate(lot.holdingPeriodDate),
+                term: lot.term === 'Short' ? 'short' : lot.term === 'Long' ? 'long' : 'unknown',
+                quantity: optionalDecimal(lot.quantity, true),
+                currentValue: optionalDecimal(lot.currentValue, true),
+                averageCostBasis: optionalDecimal(lot.averageCostBasis, true),
+                costBasisTotal: optionalDecimal(lot.costBasisTotal, true),
+                totalGainLoss: optionalDecimal(lot.totalGainLoss, true),
+                totalGainLossPercent: optionalDecimal(lot.totalGainLossPct, true),
+                isWashSale: lot.isWashedSale,
+                isNearingLongTerm: lot.isNearingLongTerm,
+              });
+            }
+            if (pageNum === lastPage) {
+              if (lots.length !== totalLots) return fail('API_RESPONSE_CHANGED');
+              break;
+            }
+            if (!result.rows.length || pagination.nextPage !== pageNum + 1)
+              return fail('API_RESPONSE_CHANGED');
+            pageNum++;
+          }
+          positions.push({ symbol: row.sym.name, holdingType, status: 'available', lots });
+        }
+        return {
+          ok: true,
+          retrievedAt: new Date().toISOString(),
+          accounts: [{ ...selectedInfos[0], positions }],
+        };
+      }
       return { ok: true, retrievedAt: new Date().toISOString(), accounts };
     }
     const endpoint = 'https://digital.fidelity.com/ftgw/digital/balwebex/api/balances';
@@ -303,8 +705,13 @@ export async function fetchFidelityPortfolio(
     }
     return { ok: true, retrievedAt: new Date().toISOString(), accounts };
   } catch (error) {
-    if (error instanceof Error && error.message === 'POSITION_RESPONSE_CHANGED')
+    if (
+      error instanceof Error &&
+      ['POSITION_RESPONSE_CHANGED', 'PORTFOLIO_RESPONSE_CHANGED'].includes(error.message)
+    )
       return fail('API_RESPONSE_CHANGED');
+    if (error instanceof Error && error.message === 'READ_AUTHENTICATION_REQUIRED')
+      return fail('AUTHENTICATION_REQUIRED');
     return fail('PORTFOLIO_UNAVAILABLE'); // Never leak provider exceptions, headers or account context.
   }
 }

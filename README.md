@@ -1,6 +1,6 @@
 # Fidelity MCP
 
-Read Fidelity accounts, balances, and positions from a local MCP client using your existing Chrome session. Fidelity MCP runs on your computer and supports a companion Chrome extension or Chrome remote debugging. This is an unofficial integration with three read-only tools: `fidelity_list_accounts`, `fidelity_get_account_balance`, and `fidelity_get_positions`.
+Read Fidelity accounts, balances, positions, open tax lots, performance, and balance history from a local MCP client using your existing Chrome session. Fidelity MCP runs on your computer and supports a companion Chrome extension or Chrome remote debugging. This is an unofficial integration with six read-only tools.
 
 List accounts first, then use the returned opaque `accountId` to read one account's balance or positions. Omit `accountId` to read all visible supported Fidelity brokerage accounts, including brokerage IRAs, regardless of the account highlighted in Chrome. Hidden accounts, external accounts, and other account types are excluded. Account numbers are masked. Orders and transfers are outside the app's scope.
 
@@ -62,9 +62,11 @@ Use this extension-free path for current prototype development. It reuses your e
 
 Starting the server attaches to Chrome but does not open Fidelity. The MCP client must begin authorization before the bridge opens or focuses the Fidelity tab. If the client already has valid MCP credentials, it may skip authorization; open and sign in to Fidelity in the connected Chrome window if a portfolio read requires it.
 
+Keep one server process running between tool calls and live checks. `FIDELITY_BRIDGE=chrome-debugging MCP_PORT=3444 npm run check:live` uses that server's existing connection and opens no additional debugging connection. Repeated or concurrent startup on the same bridge also reuses its connection. A new server process can still require a new Chrome approval; the app does not bypass Chrome's permission prompt.
+
 If Cursor stays at **Connecting…** or authentication times out after changing the server URL or port, open **Customize → MCPs → fidelity**, disable the source, then enable it again. Once it shows **Needs Authentication**, click **Authenticate** and complete Fidelity sign-in in Chrome. In a live recovery, Cursor kept trying the previous port and its Reload/Authenticate actions did not start a new connection until the source was toggled.
 
-Chrome's setting grants browser-wide control, including access to saved data, cookies and site data, and navigation. Enable it only for trusted local apps. The Fidelity MCP interface still exposes only its three read-only portfolio tools. No extension, native-host registration, or separate browser profile is required. Stopping this server disconnects it and leaves Chrome and its tabs open. Disable the setting when you no longer want apps to request debugging access. See [Chrome's setup documentation](https://developer.chrome.com/blog/chrome-devtools-mcp-debug-your-browser-session) for the setting and approval flow.
+Chrome's setting grants browser-wide control, including access to saved data, cookies and site data, and navigation. Enable it only for trusted local apps. The Fidelity MCP interface still exposes only its six read-only portfolio tools. No extension, native-host registration, or separate browser profile is required. Stopping this server disconnects it and leaves Chrome and its tabs open. Disable the setting when you no longer want apps to request debugging access. See [Chrome's setup documentation](https://developer.chrome.com/blog/chrome-devtools-mcp-debug-your-browser-session) for the setting and approval flow.
 
 If Chrome shows **Server running at: starting…** and attachment cannot find its endpoint, check whether Chrome was launched with `--remote-debugging-port` or `--remote-debugging-pipe`. Those legacy flags take precedence over the approval mode and are restricted for the ordinary Chrome profile. Save unfinished work, fully quit Chrome, then reopen it normally from your app launcher. A page reload does not remove process launch flags. Re-enable remote debugging if needed, then restart the bridge and approve Chrome's connection prompt.
 
@@ -72,7 +74,7 @@ If Chrome shows **Server running at: starting…** and attachment cannot find it
 
 With the server running, open **Settings → Plugins → MCPs → Add → Add MCP server** in the desktop app. Set the name to `fidelity`, choose **Streamable HTTP**, and enter `http://127.0.0.1:3444/mcp` (use your actual `MCP_PORT`). Leave bearer-token and header fields empty, save, then select **Authenticate** with automatic OAuth client registration. Complete Fidelity sign-in in Chrome if prompted.
 
-This local MCP setup was verified with Chrome debugging, OAuth login, and discovery of all three tools. It is saved in `~/.codex/config.toml`. A cloud connector cannot reach the server's loopback URL.
+This local MCP setup was verified with Chrome debugging, OAuth login, and tool discovery. It is saved in `~/.codex/config.toml`. A cloud connector cannot reach the server's loopback URL.
 
 ## Switch between extension and Chrome debugging
 
@@ -96,7 +98,7 @@ window it opens. The profile is saved under `~/.fidelity-mcp/browser-profile/`;
 Fidelity cookies stay in that browser profile. Account references change when
 the browser-mode server restarts. Stop the server to close its dedicated Chrome.
 
-This is an experimental transport using the same portfolio adapter and three
+This is an experimental transport using the same portfolio adapter and six
 read-only tools. Synthetic E2E coverage does not establish live Fidelity login
 compatibility. It still requires Chrome and a signed-in portfolio page. Choose
 a different `MCP_PORT` if an extension-mode server is already running; each
@@ -119,13 +121,20 @@ After revocation, clients must reconnect. An expired Fidelity session returns `A
 
 ## Tools and account selection
 
-| Tool                           | Parameters                          | Result                                                                               |
-| ------------------------------ | ----------------------------------- | ------------------------------------------------------------------------------------ |
-| `fidelity_list_accounts`       | `{}`                                | Supported account names, masked suffixes, type and opaque accountIds.                |
-| `fidelity_get_account_balance` | `{}` or `{ "accountId": "acct_…" }` | All supported accounts or one account, with an exact total and separate cash fields. |
-| `fidelity_get_positions`       | `{}` or `{ "accountId": "acct_…" }` | Holdings grouped by all supported accounts or one account.                           |
+| Tool                           | Parameters                                    | Result                                                                                     |
+| ------------------------------ | --------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `fidelity_list_accounts`       | `{}`                                          | Supported account names, masked suffixes, type and opaque accountIds.                      |
+| `fidelity_get_account_balance` | `{}` or `{ "accountId": "acct_…" }`           | All supported accounts or one account, with an exact total and separate cash fields.       |
+| `fidelity_get_positions`       | `{}` or `{ "accountId": "acct_…" }`           | Holdings grouped by all supported accounts or one account.                                 |
+| `fidelity_get_tax_lots`        | `{ "accountId": "acct_…", "symbol": "AAPL" }` | All open lots for that held security, separated by cash/margin holding.                    |
+| `fidelity_get_performance`     | `{}` or `{ "accountId": "acct_…" }`           | Per-account cumulative time-weighted pretax net returns for 1M, YTD, 1Y and 3Y.            |
+| `fidelity_get_balance_history` | `{ "range": "1M", "accountId": "acct_…" }`    | Dated account values; both fields optional, default range 1Y. Supports 1M, YTD, 1Y and 3Y. |
 
 Use the complete `accountId` returned by the accounts tool; the ellipsis above is illustrative. In extension mode, account references persist within a Chrome session, including extension worker restarts and tab reloads. Restarting Chrome changes them. In either browser mode, restarting the server changes them. List accounts again after a restart. Unknown references return `ACCOUNT_NOT_FOUND`, and empty strings or raw account numbers are invalid inputs. Last-four suffixes can collide and are not lookup keys.
+
+Tax lots require a symbol from the selected account's positions. The tool reads every page, normalizes display currencies and percentages to decimal strings, preserves wash-sale flags and distinguishes ineligible holdings from available lots. Dates use `YYYY-MM-DD`; unavailable fields remain omitted. Basis is adjusted as reported by Fidelity. `RESPONSE_TOO_LARGE` explicitly rejects results exceeding the bounded bridge size without returning a partial set or disconnecting it.
+
+Performance preserves Fidelity's reporting dates and marks unavailable periods. Returns are percentage units: `"5"` means 5%. Returns remain separate per account; the tool does not average them. Balance history also remains separate per account and includes cash flows, so balance changes are not investment returns. These tools read data and do not trade, transfer, reassign lots or save Fidelity preferences.
 
 ## Balance results
 

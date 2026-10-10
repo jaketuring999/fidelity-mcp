@@ -5,7 +5,12 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { localPaths } from '../runtime/paths.js';
 import { FidelityError } from '../domain/errors.js';
-import { balanceResultSchema, responseSchema } from './protocol.js';
+import {
+  balanceResultSchema,
+  responseSchema,
+  MAX_PORTFOLIO_BYTES,
+  type ReadOptions,
+} from './protocol.js';
 import { PortfolioReader, portfolioFailure, type PortfolioOperation } from './portfolio-reader.js';
 import { fidelityPage, portfolioUrl, isPortfolioUrl } from '../domain/fidelity-page.js';
 
@@ -22,6 +27,7 @@ export class BrowserBridge extends PortfolioReader {
   private readonly salt = randomBytes(32).toString('hex');
   private adapter = '';
   private queue: Promise<unknown> = Promise.resolve();
+  private starting: Promise<void> | undefined;
   constructor(
     private readonly base = localPaths().base,
     private readonly options: {
@@ -33,7 +39,15 @@ export class BrowserBridge extends PortfolioReader {
   ) {
     super();
   }
-  async start(): Promise<void> {
+  start(): Promise<void> {
+    // Repeated startup on the same bridge must not create another CDP connection
+    // (and another Chrome approval prompt).
+    if (this.context?.browser()?.isConnected()) return Promise.resolve();
+    return (this.starting ??= this.open().finally(() => {
+      this.starting = undefined;
+    }));
+  }
+  private async open(): Promise<void> {
     this.adapter = await readFile(new URL('./browser-adapter.js', import.meta.url), 'utf8');
     if (this.options.attach) {
       try {
@@ -102,6 +116,7 @@ export class BrowserBridge extends PortfolioReader {
     operation: PortfolioOperation,
     accountId?: string,
     selected?: Page,
+    options: ReadOptions = {},
   ): Promise<unknown> {
     const page = selected ?? (await this.page(false));
     if (!isPortfolio(page))
@@ -116,7 +131,7 @@ export class BrowserBridge extends PortfolioReader {
           let timer;
           try {
             return await Promise.race([
-              FidelityReadAdapter.fetchFidelityPortfolio(${JSON.stringify(operation)},${JSON.stringify(accountId ?? null)},${JSON.stringify(this.salt)},${JSON.stringify(fidelityPage)}),
+              FidelityReadAdapter.fetchFidelityPortfolio(${JSON.stringify(operation)},${JSON.stringify(accountId ?? null)},${JSON.stringify(this.salt)},${JSON.stringify(fidelityPage)},${JSON.stringify(options)}),
               new Promise(resolve => { timer = setTimeout(() => resolve({ok:false,code:'PORTFOLIO_UNAVAILABLE'}), 25000); })
             ]);
           } finally { clearTimeout(timer); }
@@ -128,6 +143,8 @@ export class BrowserBridge extends PortfolioReader {
         'Browser read interrupted. Check the connected Fidelity tab and retry.',
       );
     }
+    if (Buffer.byteLength(JSON.stringify(raw), 'utf8') > MAX_PORTFOLIO_BYTES)
+      throw portfolioFailure('RESPONSE_TOO_LARGE');
     const failure = z
       .object({ ok: z.literal(false), code: z.string() })
       .strict()
@@ -177,8 +194,12 @@ export class BrowserBridge extends PortfolioReader {
       'Complete Fidelity sign-in in connected Chrome, then retry.',
     );
   }
-  protected requestPortfolio(operation: PortfolioOperation, accountId?: string): Promise<unknown> {
-    const run = this.queue.then(() => this.snapshot(operation, accountId));
+  protected requestPortfolio(
+    operation: PortfolioOperation,
+    accountId?: string,
+    options?: ReadOptions,
+  ): Promise<unknown> {
+    const run = this.queue.then(() => this.snapshot(operation, accountId, undefined, options));
     this.queue = run.catch(() => {});
     return run;
   }

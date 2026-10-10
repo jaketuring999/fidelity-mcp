@@ -1,5 +1,6 @@
 import { fetchFidelityPortfolio, type ReadOperation } from './fidelity-api.js';
 import type { FailureCode } from '../../src/bridge/protocol.js';
+import { commandSchema, MAX_PORTFOLIO_BYTES, type ReadOptions } from '../../src/bridge/protocol.js';
 
 import {
   fidelityPage,
@@ -54,6 +55,7 @@ async function readPortfolio(
   operation: ReadOperation,
   accountId?: string,
   tab?: chrome.tabs.Tab,
+  options: ReadOptions = {},
 ): Promise<unknown> {
   tab ??= await chooseTab(false);
   if (tab.id === undefined || !tab.url) throw new TabError('AUTHENTICATION_REQUIRED');
@@ -61,12 +63,14 @@ async function readPortfolio(
   const results = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: fetchFidelityPortfolio,
-    args: [operation, accountId ?? null, await accountSalt(), fidelityPage],
+    args: [operation, accountId ?? null, await accountSalt(), fidelityPage, options],
     world: 'MAIN',
   });
   const result = results[0]?.result;
   if (!result) throw new TabError('PORTFOLIO_UNAVAILABLE');
   if (!result.ok) throw new TabError(result.code);
+  if (new TextEncoder().encode(JSON.stringify(result)).byteLength > MAX_PORTFOLIO_BYTES)
+    throw new TabError('RESPONSE_TOO_LARGE');
   const { ok: _ok, ...snapshot } = result;
   return snapshot;
 }
@@ -148,27 +152,22 @@ function ensureNative(): void {
         });
       return;
     }
-    if (
-      data.operation !== 'read_balance' &&
-      data.operation !== 'read_positions' &&
-      data.operation !== 'list_accounts'
-    )
-      return;
-    if (
-      data.accountId !== undefined &&
-      (typeof data.accountId !== 'string' || !/^acct_[a-f0-9]{32}$/.test(data.accountId))
-    )
-      return;
-    if (data.operation === 'list_accounts' && data.accountId !== undefined) return;
-    if (Object.keys(data).some((key) => !['type', 'id', 'operation', 'accountId'].includes(key)))
-      return;
-    const operation = data.operation,
-      accountId = data.accountId as string | undefined;
+    const parsed = commandSchema.safeParse(message);
+    if (!parsed.success || parsed.data.operation === 'connect_fidelity') return;
+    const command = parsed.data;
+    const operation = command.operation;
+    const accountId = command.operation === 'list_accounts' ? undefined : command.accountId;
+    const options: ReadOptions =
+      command.operation === 'read_tax_lots'
+        ? { symbol: command.symbol }
+        : command.operation === 'read_balance_history'
+          ? { range: command.range }
+          : {};
     // The server can request only these fixed operations, never arbitrary script.
     queue = queue
       .then(async () => {
         try {
-          const result = await readPortfolio(operation, accountId);
+          const result = await readPortfolio(operation, accountId, undefined, options);
           if (nativePort === port)
             port.postMessage({ type: 'response', id: data.id, ok: true, result });
         } catch (error) {
