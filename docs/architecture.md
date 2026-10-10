@@ -18,6 +18,13 @@ WebSocket endpoint rather than the owned-browser pipe. `noDefaults` avoids
 Playwright's default viewport, download, focus and media overrides. Shutdown
 disconnects the CDP browser connection without closing Chrome or its tabs.
 
+Both transports inherit `PortfolioReader`, which owns account-reference input
+validation, response schemas, freshness and account-scope checks, exact balance
+totals, and positions result formatting. Provider failures use shared messages.
+`ExtensionBridge` supplies snapshots through native messaging; `BrowserBridge`
+supplies them through serialized CDP evaluations. Connection, tab selection,
+readiness and shutdown remain specific to each transport.
+
 The adapter and normalized MCP reads are identical in both browser modes.
 Automated attach E2E uses a separate synthetic browser with a CDP endpoint;
 it verifies reads and that shutdown preserves the browser and unrelated tabs.

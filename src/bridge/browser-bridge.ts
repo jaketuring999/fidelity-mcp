@@ -5,14 +5,8 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { localPaths } from '../runtime/paths.js';
 import { FidelityError } from '../domain/errors.js';
-import { makeSnapshot } from '../domain/balances.js';
-import {
-  accountIdSchema,
-  accountsResultSchema,
-  balanceResultSchema,
-  positionsResultSchema,
-  responseSchema,
-} from './protocol.js';
+import { balanceResultSchema, responseSchema } from './protocol.js';
+import { PortfolioReader, portfolioFailure, type PortfolioOperation } from './portfolio-reader.js';
 
 const PORTFOLIO = 'https://digital.fidelity.com/ftgw/digital/portfolio/summary';
 function isPortfolio(page: Page): boolean {
@@ -29,7 +23,7 @@ function isPortfolio(page: Page): boolean {
 
 // Playwright owns a dedicated profile or attaches to user-approved everyday Chrome.
 // Only our fixed adapter is evaluated; no cookie export or extension/native host.
-export class BrowserBridge {
+export class BrowserBridge extends PortfolioReader {
   private context: BrowserContext | undefined;
   private selected: Page | undefined;
   private attachedBrowser: Browser | undefined;
@@ -44,7 +38,9 @@ export class BrowserBridge {
       attach?: boolean;
       cdpEndpoint?: string;
     } = {},
-  ) {}
+  ) {
+    super();
+  }
   async start(): Promise<void> {
     this.adapter = await readFile(new URL('./browser-adapter.js', import.meta.url), 'utf8');
     if (this.options.attach) {
@@ -111,11 +107,10 @@ export class BrowserBridge {
     return this.selected;
   }
   private async snapshot(
-    operation: 'list_accounts' | 'read_balance' | 'read_positions',
+    operation: PortfolioOperation,
     accountId?: string,
     selected?: Page,
   ): Promise<unknown> {
-    if (accountId !== undefined) accountIdSchema.parse(accountId);
     const page = selected ?? (await this.page(false));
     if (!isPortfolio(page))
       throw new FidelityError(
@@ -151,11 +146,7 @@ export class BrowserBridge {
         id: '00000000-0000-4000-8000-000000000000',
         ...failure.data,
       });
-      if (parsed.success && !parsed.data.ok)
-        throw new FidelityError(
-          parsed.data.code,
-          'Fidelity read failed. Check the connected signed-in browser tab and retry.',
-        );
+      if (parsed.success && !parsed.data.ok) throw portfolioFailure(parsed.data.code);
     }
     const success = z
       .object({ ok: z.literal(true) })
@@ -194,53 +185,10 @@ export class BrowserBridge {
       'Complete Fidelity sign-in in connected Chrome, then retry.',
     );
   }
-  private read<T extends { retrievedAt: string; accounts: Array<{ accountId: string }> }>(
-    operation: 'list_accounts' | 'read_balance' | 'read_positions',
-    schema: z.ZodType<T>,
-    accountId?: string,
-  ): Promise<T> {
-    const run = this.queue.then(async () => {
-      const parsed = schema.safeParse(await this.snapshot(operation, accountId));
-      if (!parsed.success)
-        throw new FidelityError(
-          'INVALID_BRIDGE_RESPONSE',
-          'Unexpected browser portfolio response.',
-        );
-      const result = parsed.data;
-      const age = Date.now() - Date.parse(result.retrievedAt);
-      if (
-        age < -5000 ||
-        age > 30_000 ||
-        new Set(result.accounts.map((a) => a.accountId)).size !== result.accounts.length ||
-        (accountId && (result.accounts.length !== 1 || result.accounts[0]?.accountId !== accountId))
-      )
-        throw new FidelityError(
-          'INVALID_BRIDGE_RESPONSE',
-          'Unexpected browser account scope or snapshot age.',
-        );
-      return result;
-    });
+  protected requestPortfolio(operation: PortfolioOperation, accountId?: string): Promise<unknown> {
+    const run = this.queue.then(() => this.snapshot(operation, accountId));
     this.queue = run.catch(() => {});
     return run;
-  }
-  listAccounts() {
-    return this.read('list_accounts', accountsResultSchema);
-  }
-  async getBalance(accountId?: string) {
-    const result = await this.read('read_balance', balanceResultSchema, accountId);
-    return makeSnapshot(result.accounts, result.retrievedAt, accountId);
-  }
-  async getPositions(accountId?: string) {
-    const result = await this.read('read_positions', positionsResultSchema, accountId);
-    return {
-      source: 'fidelity_internal_api',
-      scope: accountId ? 'specific_brokerage_account' : 'all_visible_brokerage_accounts',
-      retrievedAt: result.retrievedAt,
-      currency: 'USD',
-      freshnessNote:
-        'Retrieval time is not a market-data timestamp; Fidelity prices and cost basis may lag.',
-      accounts: result.accounts,
-    } as const;
   }
   async close(): Promise<void> {
     if (this.options.attach) await this.attachedBrowser?.close();

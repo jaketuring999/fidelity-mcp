@@ -1,11 +1,11 @@
 import { FastMCP, ToolResult } from '@prefecthq/fastmcp-ts/server';
 import { z } from 'zod';
 import { FidelityError } from '../domain/errors.js';
-import type { ExtensionBridge } from '../bridge/extension-bridge.js';
+import type { PortfolioReader } from '../bridge/portfolio-reader.js';
 import { accountIdSchema } from '../bridge/protocol.js';
 
 export function createServer(
-  session: Pick<ExtensionBridge, 'listAccounts' | 'getBalance' | 'getPositions'>,
+  session: Pick<PortfolioReader, 'listAccounts' | 'getBalance' | 'getPositions'>,
 ): FastMCP {
   const server = new FastMCP({ name: 'fidelity-mcp', version: '0.2.0', logLevel: 'error' });
   const annotations = {

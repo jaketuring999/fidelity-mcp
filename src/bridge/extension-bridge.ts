@@ -2,35 +2,14 @@ import { encodeMessage, MessageDecoder } from './framing.js';
 import { createServer, createConnection, type Server, type Socket } from 'node:net';
 import { chmod, lstat, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { makeSnapshot } from '../domain/balances.js';
 import { FidelityError } from '../domain/errors.js';
 import { localPaths } from '../runtime/paths.js';
-import {
-  accountIdSchema,
-  accountsResultSchema,
-  balanceResultSchema,
-  positionsResultSchema,
-  responseSchema,
-  type BridgeCommand,
-} from './protocol.js';
+import { responseSchema, type BridgeCommand } from './protocol.js';
+import { PortfolioReader, portfolioFailure, type PortfolioOperation } from './portfolio-reader.js';
 import { z } from 'zod';
 import { EventEmitter } from 'node:events';
 
-const failureMessages = {
-  AUTHENTICATION_REQUIRED:
-    'Sign in and complete 2FA directly in your Fidelity Chrome tab, then retry.',
-  API_CONTEXT_UNAVAILABLE:
-    'Fidelity request context is unavailable. Reload your signed-in portfolio tab and retry.',
-  API_RESPONSE_CHANGED:
-    'Fidelity returned an unexpected or incomplete balance response. The API adapter may need updating.',
-  BALANCE_UNAVAILABLE:
-    'Fidelity’s balance request failed. Check your signed-in portfolio tab and retry.',
-  PORTFOLIO_UNAVAILABLE:
-    'Fidelity’s portfolio request failed. Check your signed-in portfolio tab and retry.',
-  ACCOUNT_NOT_FOUND:
-    'This account reference is unavailable. List accounts again and use a current accountId.',
-};
-export class ExtensionBridge {
+export class ExtensionBridge extends PortfolioReader {
   private readonly paths;
   private server: Server | undefined;
   private peer: Socket | undefined;
@@ -52,6 +31,7 @@ export class ExtensionBridge {
     private readonly log: (text: string) => void = (text) =>
       console.error(`[fidelity-mcp] ${text}`),
   ) {
+    super();
     this.paths = localPaths(base);
   }
   get connected(): boolean {
@@ -145,7 +125,7 @@ export class ExtensionBridge {
       clearTimeout(pending.timer);
       this.pending.delete(response.id);
       if (response.ok) pending.resolve(response.result);
-      else pending.reject(new FidelityError(response.code, failureMessages[response.code]));
+      else pending.reject(portfolioFailure(response.code));
     });
     socket.on('data', (chunk) => {
       try {
@@ -259,68 +239,16 @@ export class ExtensionBridge {
       this.peer!.write(encodeMessage(command));
     });
   }
-  private checkFreshness(retrievedAt: string): void {
-    const age = Date.now() - Date.parse(retrievedAt);
-    if (age < -5000 || age > 30_000)
-      throw new FidelityError(
-        'INVALID_BRIDGE_RESPONSE',
-        'The extension returned an outdated snapshot. Retry the read.',
-      );
-  }
-  private checkAccounts(accounts: Array<{ accountId: string }>, accountId?: string): void {
-    if (
-      new Set(accounts.map((a) => a.accountId)).size !== accounts.length ||
-      (accountId && (accounts.length !== 1 || accounts[0]?.accountId !== accountId))
-    )
-      throw new FidelityError(
-        'INVALID_BRIDGE_RESPONSE',
-        'The extension returned an unexpected account scope. Retry the read.',
-      );
-  }
-  private async read<T extends { retrievedAt: string; accounts: Array<{ accountId: string }> }>(
-    operation: 'list_accounts' | 'read_balance' | 'read_positions',
-    schema: z.ZodType<T>,
-    accountId?: string,
-  ): Promise<T> {
-    if (accountId !== undefined) accountIdSchema.parse(accountId);
-    const parsed = schema.safeParse(
-      await this.send(
-        {
-          type: 'command',
-          id: randomUUID(),
-          operation,
-          ...(accountId === undefined ? {} : { accountId }),
-        },
-        25_000,
-      ),
+  protected requestPortfolio(operation: PortfolioOperation, accountId?: string): Promise<unknown> {
+    return this.send(
+      {
+        type: 'command',
+        id: randomUUID(),
+        operation,
+        ...(accountId === undefined ? {} : { accountId }),
+      },
+      25_000,
     );
-    if (!parsed.success)
-      throw new FidelityError(
-        'INVALID_BRIDGE_RESPONSE',
-        'The extension returned an invalid portfolio response. Update both components and retry.',
-      );
-    this.checkFreshness(parsed.data.retrievedAt);
-    this.checkAccounts(parsed.data.accounts, accountId);
-    return parsed.data;
-  }
-  listAccounts() {
-    return this.read('list_accounts', accountsResultSchema);
-  }
-  async getBalance(accountId?: string) {
-    const result = await this.read('read_balance', balanceResultSchema, accountId);
-    return makeSnapshot(result.accounts, result.retrievedAt, accountId);
-  }
-  async getPositions(accountId?: string) {
-    const result = await this.read('read_positions', positionsResultSchema, accountId);
-    return {
-      source: 'fidelity_internal_api',
-      scope: accountId ? 'specific_brokerage_account' : 'all_visible_brokerage_accounts',
-      retrievedAt: result.retrievedAt,
-      currency: 'USD',
-      freshnessNote:
-        'Retrieval time is not a market-data timestamp; Fidelity prices and cost basis may lag.',
-      accounts: result.accounts,
-    } as const;
   }
   async close(): Promise<void> {
     this.closing = true;

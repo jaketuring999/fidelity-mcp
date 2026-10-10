@@ -203,6 +203,23 @@ for (const attach of [false, true])
         }
         mode = 'normal';
         const page = context.pages().find((p) => p.url().includes('/portfolio/'))!;
+        await page.evaluate(() => {
+          // Simulate an out-of-date snapshot produced in the browser context.
+          const original = Date.prototype.toISOString;
+          Date.prototype.toISOString = function () {
+            return original.call(new Date(this.getTime() - 120_000));
+          };
+        });
+        for (const name of [
+          'fidelity_list_accounts',
+          'fidelity_get_account_balance',
+          'fidelity_get_positions',
+        ]) {
+          const stale = await tool(name);
+          assert.equal(stale.isError, true);
+          assert.equal(stale.structuredContent, undefined);
+          assert.match(JSON.stringify(stale), /INVALID_BRIDGE_RESPONSE/);
+        }
         await page.reload();
         assert.equal(
           (await tool('fidelity_list_accounts')).structuredContent.accounts[0].accountId,
@@ -261,6 +278,7 @@ for (const attach of [false, true])
                 'precision',
                 'unknown accounts do not call provider',
                 'incomplete responses and session expiry',
+                'shared portfolio validation rejects stale snapshots for all three tools',
                 'reload and closed-tab recovery',
                 'foreign origin refused',
                 'browser closure fails safely',
