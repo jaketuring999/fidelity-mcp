@@ -51,6 +51,8 @@ test(
       | 'missing-balance'
       | 'negative-balance'
       | 'invalid-number'
+      | 'position-placeholders'
+      | 'required-placeholder'
       | 'empty-positions'
       | 'stale-snapshot'
       | 'duplicate-snapshot'
@@ -197,6 +199,15 @@ test(
         }
         if (mode === 'missing-balance' && balance) payload[0].balance.totalAcctVal = null;
         if (mode === 'invalid-number' && !balance) payload.rowData[1].qty.val = 'NaN';
+        if (mode === 'required-placeholder' && !balance) payload.rowData[1].curVal.val = '--';
+        if (mode === 'position-placeholders' && !balance)
+          for (const row of payload.rowData.filter((row: any) => row.rowType === 'POSITION')) {
+            row.qty = { val: '--' };
+            row.lstPrStk = { top: { val: 'n/a' } };
+            row.cstBasStk = { top: { val: '--' } };
+            row.todGLStk = { top: { val: 'n/a' } };
+            row.totGLStk = { top: { val: '--' } };
+          }
         if (mode === 'unknown-row' && !balance)
           payload.rowData[1].rowType = 'NEW_UNSUPPORTED_POSITION';
         return Response.json(payload);
@@ -465,6 +476,7 @@ test(
         'incomplete',
         'wrong-account',
         'invalid-number',
+        'required-placeholder',
         'unknown-row',
       ] as const) {
         mode = failure;
@@ -485,6 +497,25 @@ test(
         assert.equal(error.isError, true);
         assert.equal(error.structuredContent, undefined);
         assert.match(JSON.stringify(error), new RegExp(code));
+      }
+      mode = 'position-placeholders';
+      for (const args of [{}, { accountId }]) {
+        const result = await tool('fidelity_get_positions', args);
+        assert.equal(result.isError, undefined);
+        assert.equal(result.structuredContent.accounts.length, 'accountId' in args ? 1 : 2);
+        for (const account of result.structuredContent.accounts) {
+          const holding = account.positions[0];
+          assert.equal(holding.symbol, 'TEST');
+          assert.equal(holding.currentValue, '13.87');
+          for (const field of [
+            'quantity',
+            'lastPrice',
+            'costBasis',
+            'todayGainLoss',
+            'totalGainLoss',
+          ])
+            assert.equal(holding[field], undefined);
+        }
       }
       mode = 'empty-positions';
       const empty = (await tool('fidelity_get_positions', { accountId })).structuredContent;
@@ -552,6 +583,7 @@ test(
               'References survive worker reads within a browser session.',
               'Balances add exactly in cents; negative values, zero settled cash and cash-only withdrawal semantics are preserved.',
               'Position precision preserved; headers/totals/pending rows excluded.',
+              'Optional -- and n/a position measures omitted for all/single-account reads; required placeholders and malformed numbers rejected.',
               'Cash and margin distinguished.',
               'Unknown accounts do not call the provider.',
               'Invalid inputs, missing values/context, provider failures, partial responses, changed rows and expired sessions fail explicitly.',

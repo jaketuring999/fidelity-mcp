@@ -199,7 +199,9 @@ export async function fetchFidelityPortfolio(
         if (typeof symbol !== 'string' || !symbol || currentValue === undefined)
           return fail('API_RESPONSE_CHANGED');
         const optional = (value: unknown): string | undefined => {
-          if (value === undefined || value === null) return undefined;
+          // Fidelity uses display placeholders when an optional measure is unavailable.
+          if (value === undefined || value === null || value === '--' || value === 'n/a')
+            return undefined;
           const text = decimal(value, 10);
           if (text === undefined) throw new Error('POSITION_RESPONSE_CHANGED');
           return text;
