@@ -1,3 +1,4 @@
+import { advancedFixture, verifyAdvancedTools } from './advanced-fixtures.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -109,7 +110,10 @@ for (const attach of [false, true])
         return decoded.result ?? decoded;
       }
       try {
+        await Promise.all([bridge.start(), bridge.start()]);
+        const firstContext = (bridge as unknown as { context: BrowserContext }).context;
         await bridge.start();
+        assert.equal((bridge as unknown as { context: BrowserContext }).context, firstContext);
         // Private test instrumentation installs synthetic HTTP before any navigation.
         const context = (bridge as unknown as { context: BrowserContext }).context;
         await context.route('**/*', async (route) => {
@@ -142,6 +146,14 @@ for (const attach of [false, true])
             return;
           }
           assert.equal(request.method(), 'POST');
+          const advanced = advancedFixture(url.pathname, request.postDataJSON(), mode);
+          if (advanced !== undefined) {
+            await route.fulfill({
+              contentType: 'application/json',
+              body: JSON.stringify(advanced),
+            });
+            return;
+          }
           assert.equal(request.headers()['x-csrf-token'], 'synthetic-csrf');
           const body = request.postDataJSON();
           const balance = url.pathname.endsWith('/balances');
@@ -165,6 +177,7 @@ for (const attach of [false, true])
                     rowType: 'POSITION',
                     actNum: id,
                     sym: { name: 'TEST', desc: 'Synthetic holding' },
+                    meta: { holdingType: 'Margin', isEligibleForLots: mode !== 'ineligible-lots' },
                     qty: { val: '1.12345678' },
                     curVal: { val: '13.87' },
                     totGLStk: {
@@ -318,6 +331,9 @@ for (const attach of [false, true])
           }
         }
         mode = 'normal';
+        await verifyAdvancedTools(tool, accountId, (value) => {
+          mode = value;
+        });
         const before = calls.length;
         assert.match(
           JSON.stringify(
@@ -425,6 +441,8 @@ for (const attach of [false, true])
               liveFidelityValidated: false,
               checks: [
                 'Cursor hosted OAuth callback through browser readiness, PKCE token exchange and authenticated HTTP tools/list',
+                'Repeated startup reuses one connection and existing context',
+                'Advanced MCP reads: paginated formatted tax lots, typed performance, unavailable periods, all history ranges, explicit malformed/partial/expired failures',
                 'readiness',
                 'all and single account reads',
                 'Optional -- and n/a measures omitted without losing holdings; malformed optional numbers rejected',

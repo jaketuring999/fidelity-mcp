@@ -140,5 +140,154 @@
         }
       ]
     }
+  },
+  "performance": {
+    "request": {
+      "entityDetails": [
+        {
+          "entityId": "DEMO0001",
+          "entityType": "account",
+          "sourceSystemId": "ICS"
+        }
+      ],
+      "isAggregate": false,
+      "includePartialInMonthlyFreq": false,
+      "performanceDetails": [
+        {
+          "calculationTypes": [
+            "TW"
+          ],
+          "taxTypes": [
+            "pretax"
+          ],
+          "perfDetailType": "cumulative",
+          "returnTypes": [
+            "NET"
+          ],
+          "returnFrequency": [
+            "D"
+          ],
+          "historicalReturnsFrequency": [],
+          "standardTimePeriods": [
+            "1M",
+            "YTD",
+            "1Y",
+            "3Y"
+          ]
+        }
+      ]
+    },
+    "response": {
+      "perfDetails": [
+        {
+          "entityId": "DEMO0001",
+          "entityType": "account",
+          "asOfDate": "10/09/2026",
+          "dailyAsOfDate": "10/09/2026",
+          "annualPerfReturns": null,
+          "cumulativePerfReturns": [
+            {
+              "calculationType": "TW",
+              "taxType": "pretax",
+              "returnFrequency": "D",
+              "perfInceptionDate": "01/01/2026",
+              "returns": [
+                {
+                  "period": "1M",
+                  "startDate": "09/09/2026",
+                  "endDate": "10/09/2026",
+                  "netReturn": -2.125,
+                  "benchmarkReturn": null
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "balanceHistory": {
+    "request": {
+      "range": "1M",
+      "acctList": [
+        {
+          "acctNum": "DEMO0001",
+          "acctType": "Brokerage",
+          "acctSubType": "DEMO"
+        }
+      ]
+    },
+    "response": {
+      "sysMsg": null,
+      "balHistoryDetail": {
+        "requestedDateRangeGainLoss": 25.5,
+        "requestedDateRangeGainLossPct": null,
+        "balances": [
+          {
+            "date": "10/08/2026",
+            "value": 100.0
+          },
+          {
+            "date": "10/09/2026",
+            "value": 125.5
+          }
+        ]
+      }
+    }
+  },
+  "taxLots": {
+    "request": {
+      "acctNum": "DEMO0001",
+      "acctType": "Brokerage",
+      "symbol": "DEMO",
+      "cusip": "SYNTHETIC",
+      "holdingType": "Cash",
+      "isUnadjusted": false,
+      "isCostBasisAdjusted": false,
+      "pageNum": 1,
+      "pageSize": 250,
+      "returnBasketTaxLotDetail": false,
+      "positionDetail": {
+        "lastPrice": "25.00",
+        "securityType": "Equity",
+        "currentValue": "125.00",
+        "quantity": "5",
+        "costBasis": "Actual",
+        "isCostBasisEditable": false,
+        "isNotQuotable": false,
+        "isCrypto": false
+      }
+    },
+    "response": {
+      "pagination": {
+        "currentPage": 1,
+        "prevPage": 0,
+        "nextPage": 0,
+        "lastPage": 1,
+        "pageSize": 250,
+        "totalLots": 1
+      },
+      "rows": [
+        {
+          "index": 0,
+          "dateAcquired": "Sep-09-2026",
+          "holdingPeriodDate": "Sep-08-2026",
+          "term": "Short",
+          "quantity": 5,
+          "totalGainLoss": "($1,234.56)",
+          "totalGainLossPct": "-1.25%",
+          "currentValue": "$125.00",
+          "averageCostBasis": "--",
+          "costBasisTotal": "n/a",
+          "isWashedSale": true,
+          "isNearingLongTerm": false
+        }
+      ],
+      "columns": [],
+      "metadata": {
+        "isUnadjusted": false,
+        "hasWashSales": true
+      }
+    }
   }
 }

@@ -1,5 +1,5 @@
 {
-  "scope": "Validated balances and positions contracts plus source-discovered positions routes. Raw evidence is optional local-only research; source discovery does not establish a working endpoint.",
+  "scope": "Validated balances, positions, open tax lots, performance and balance history plus source-discovered route candidates. Contracts describe consumed fields only.",
   "endpoints": [
     {
       "method": "POST",
@@ -25,12 +25,13 @@
     {
       "method": "POST",
       "path": "/ftgw/digital/positions/poswebex/api/openlots-json",
-      "status": "source_discovered",
-      "requestSchema": null,
-      "responseSchema": null,
+      "status": "live_validated",
+      "requestSchema": "OpenLotsRequest",
+      "responseSchema": "OpenLotsResponse",
       "evidence": {
         "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
-        "offset": 377205
+        "offset": 377205,
+        "adapter": "../../extension/src/fidelity-api.ts"
       }
     },
     {
@@ -262,6 +263,28 @@
       "evidence": {
         "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
         "offset": 378799
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/portfolio/api/GetAcctPerf",
+      "status": "live_validated",
+      "requestSchema": "PerformanceRequest",
+      "responseSchema": "PerformanceResponse",
+      "evidence": {
+        "file": "../../extension/src/fidelity-api.ts",
+        "discovery": "Saved client selections and request builder; live Chrome confirmed REST operation routing on 2026-10-10"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/portfolio/api/BalanceHistory",
+      "status": "live_validated",
+      "requestSchema": "BalanceHistoryRequest",
+      "responseSchema": "BalanceHistoryResponse",
+      "evidence": {
+        "file": "../../extension/src/fidelity-api.ts",
+        "discovery": "Saved client selections and request builder; live Chrome confirmed REST operation routing on 2026-10-10"
       }
     }
   ]

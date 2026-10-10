@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Fidelity browser API — reconstructed reference",
-    "version": "2026-10-09",
+    "title": "Fidelity browser API \u2014 reconstructed reference",
+    "version": "2026-10-10",
     "description": "Unofficial partial contract derived from the adapter, live read validation, and saved public client code. This is not Fidelity Swagger or a complete server schema. Synthetic fixtures only. Authentication remains in Chrome."
   },
   "servers": [
@@ -225,6 +225,114 @@
         },
         "x-evidence": "adapter_and_live_validation",
         "x-schema-coverage": "partial"
+      }
+    },
+    "/ftgw/digital/portfolio/api/GetAcctPerf": {
+      "post": {
+        "summary": "Account performance",
+        "description": "Plain JSON REST operation, not a GraphQL envelope. Fixed cumulative time-weighted pretax net returns for four standard periods. Preserve provider metadata; missing periods are not zero. Rates are percent units.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PerformanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerformanceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Authentication required"
+          }
+        },
+        "x-evidence": "adapter_and_live_validation",
+        "x-schema-coverage": "consumed_fields_only"
+      }
+    },
+    "/ftgw/digital/portfolio/api/BalanceHistory": {
+      "post": {
+        "summary": "Account balance history",
+        "description": "Plain JSON REST operation. The response aggregates acctList without echoing account identities. Our tool calls one account at a time and fails on provider system messages or incomplete history. Historical values include cash flows and overnight prices; balance change is not return.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BalanceHistoryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BalanceHistoryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Authentication required"
+          }
+        },
+        "x-evidence": "adapter_and_live_validation",
+        "x-schema-coverage": "consumed_fields_only"
+      }
+    },
+    "/ftgw/digital/positions/poswebex/api/openlots-json": {
+      "post": {
+        "summary": "Open tax lots",
+        "description": "Uses runtime positions bootstrap and X-CSRF-Token. Build security metadata from a freshly scoped positions response. Read every page with stable totals, reject loops, duplicate lot indices and count mismatches. Adjusted basis; no lot reassignment or other writes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenLotsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenLotsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Authentication required"
+          }
+        },
+        "x-evidence": "adapter_and_live_validation",
+        "x-schema-coverage": "consumed_fields_only"
       }
     }
   },
@@ -1047,6 +1155,581 @@
           "totalNoOfAccts",
           "rowData",
           "acctTot"
+        ],
+        "additionalProperties": true
+      },
+      "HistoryAccountInput": {
+        "type": "object",
+        "properties": {
+          "acctNum": {
+            "type": "string"
+          },
+          "acctType": {
+            "const": "Brokerage"
+          },
+          "acctSubType": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "acctNum",
+          "acctType"
+        ],
+        "additionalProperties": true
+      },
+      "BalanceHistoryRequest": {
+        "type": "object",
+        "properties": {
+          "range": {
+            "enum": [
+              "1M",
+              "YTD",
+              "1Y",
+              "3Y"
+            ]
+          },
+          "acctList": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryAccountInput"
+            }
+          }
+        },
+        "required": [
+          "range",
+          "acctList"
+        ],
+        "additionalProperties": true
+      },
+      "BalanceHistoryResponse": {
+        "type": "object",
+        "properties": {
+          "sysMsg": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "object"
+            }
+          },
+          "balHistoryDetail": {
+            "type": "object",
+            "properties": {
+              "requestedDateRangeGainLoss": {
+                "type": [
+                  "number",
+                  "string",
+                  "null"
+                ],
+                "description": "Provider numeric measure. Tax-lot display strings can include sign, dollar symbol, grouped thousands, percent suffix or parentheses. Exact -- and n/a indicate unavailable; never convert unavailable values to zero."
+              },
+              "requestedDateRangeGainLossPct": {
+                "type": [
+                  "number",
+                  "string",
+                  "null"
+                ],
+                "description": "Provider numeric measure. Tax-lot display strings can include sign, dollar symbol, grouped thousands, percent suffix or parentheses. Exact -- and n/a indicate unavailable; never convert unavailable values to zero."
+              },
+              "balances": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "date": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Provider calendar date, typically MM/DD/YYYY for portfolio REST and Mon-DD-YYYY for tax lots. Normalized tool output uses YYYY-MM-DD. Missing dates remain missing."
+                    },
+                    "value": {
+                      "type": [
+                        "number",
+                        "string",
+                        "null"
+                      ],
+                      "description": "Provider numeric measure. Tax-lot display strings can include sign, dollar symbol, grouped thousands, percent suffix or parentheses. Exact -- and n/a indicate unavailable; never convert unavailable values to zero."
+                    }
+                  },
+                  "required": [
+                    "date",
+                    "value"
+                  ],
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": [
+              "balances"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "balHistoryDetail"
+        ],
+        "additionalProperties": true
+      },
+      "PerformanceRequest": {
+        "type": "object",
+        "properties": {
+          "entityDetails": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "entityId": {
+                  "type": "string"
+                },
+                "entityType": {
+                  "const": "account"
+                },
+                "sourceSystemId": {
+                  "const": "ICS"
+                }
+              },
+              "required": [
+                "entityId",
+                "entityType",
+                "sourceSystemId"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "isAggregate": {
+            "const": false
+          },
+          "includePartialInMonthlyFreq": {
+            "const": false
+          },
+          "performanceDetails": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "calculationTypes": {
+                  "const": [
+                    "TW"
+                  ]
+                },
+                "taxTypes": {
+                  "const": [
+                    "pretax"
+                  ]
+                },
+                "perfDetailType": {
+                  "const": "cumulative"
+                },
+                "returnTypes": {
+                  "const": [
+                    "NET"
+                  ]
+                },
+                "returnFrequency": {
+                  "const": [
+                    "D"
+                  ]
+                },
+                "historicalReturnsFrequency": {
+                  "const": []
+                },
+                "standardTimePeriods": {
+                  "const": [
+                    "1M",
+                    "YTD",
+                    "1Y",
+                    "3Y"
+                  ]
+                }
+              },
+              "required": [],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "entityDetails",
+          "performanceDetails",
+          "isAggregate",
+          "includePartialInMonthlyFreq"
+        ],
+        "additionalProperties": true
+      },
+      "PerformancePeriod": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "enum": [
+              "1M",
+              "YTD",
+              "1Y",
+              "3Y"
+            ]
+          },
+          "startDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider calendar date, typically MM/DD/YYYY for portfolio REST and Mon-DD-YYYY for tax lots. Normalized tool output uses YYYY-MM-DD. Missing dates remain missing."
+          },
+          "endDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider calendar date, typically MM/DD/YYYY for portfolio REST and Mon-DD-YYYY for tax lots. Normalized tool output uses YYYY-MM-DD. Missing dates remain missing."
+          },
+          "netReturn": {
+            "type": [
+              "number",
+              "string",
+              "null"
+            ],
+            "description": "Provider numeric measure. Tax-lot display strings can include sign, dollar symbol, grouped thousands, percent suffix or parentheses. Exact -- and n/a indicate unavailable; never convert unavailable values to zero."
+          },
+          "benchmarkReturn": {
+            "type": [
+              "number",
+              "string",
+              "null"
+            ],
+            "description": "Provider numeric measure. Tax-lot display strings can include sign, dollar symbol, grouped thousands, percent suffix or parentheses. Exact -- and n/a indicate unavailable; never convert unavailable values to zero."
+          }
+        },
+        "required": [
+          "period",
+          "startDate",
+          "endDate"
+        ],
+        "additionalProperties": true
+      },
+      "PerformanceSeries": {
+        "type": "object",
+        "properties": {
+          "calculationType": {
+            "const": "TW"
+          },
+          "taxType": {
+            "const": "pretax"
+          },
+          "returnFrequency": {
+            "const": "D"
+          },
+          "perfInceptionDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider calendar date, typically MM/DD/YYYY for portfolio REST and Mon-DD-YYYY for tax lots. Normalized tool output uses YYYY-MM-DD. Missing dates remain missing."
+          },
+          "returns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PerformancePeriod"
+            }
+          }
+        },
+        "required": [
+          "calculationType",
+          "taxType",
+          "returnFrequency",
+          "returns"
+        ],
+        "additionalProperties": true
+      },
+      "PerformanceResponse": {
+        "type": "object",
+        "properties": {
+          "perfDetails": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "entityId": {
+                  "type": "string"
+                },
+                "entityType": {
+                  "const": "account"
+                },
+                "asOfDate": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Provider calendar date, typically MM/DD/YYYY for portfolio REST and Mon-DD-YYYY for tax lots. Normalized tool output uses YYYY-MM-DD. Missing dates remain missing."
+                },
+                "dailyAsOfDate": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Provider calendar date, typically MM/DD/YYYY for portfolio REST and Mon-DD-YYYY for tax lots. Normalized tool output uses YYYY-MM-DD. Missing dates remain missing."
+                },
+                "cumulativePerfReturns": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PerformanceSeries"
+                  }
+                },
+                "annualPerfReturns": {
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "entityId",
+                "entityType",
+                "cumulativePerfReturns"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "perfDetails"
+        ],
+        "additionalProperties": true
+      },
+      "OpenLotsRequest": {
+        "type": "object",
+        "properties": {
+          "acctNum": {
+            "type": "string"
+          },
+          "acctType": {
+            "const": "Brokerage"
+          },
+          "cusip": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "holdingType": {
+            "type": "string"
+          },
+          "isUnadjusted": {
+            "const": false
+          },
+          "isCostBasisAdjusted": {
+            "type": "boolean"
+          },
+          "pageNum": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "const": 250
+          },
+          "returnBasketTaxLotDetail": {
+            "const": false
+          },
+          "slvCd": {
+            "type": "string"
+          },
+          "positionDetail": {
+            "type": "object",
+            "properties": {
+              "lastPrice": {
+                "type": [
+                  "number",
+                  "string",
+                  "null"
+                ],
+                "description": "Provider numeric measure. Tax-lot display strings can include sign, dollar symbol, grouped thousands, percent suffix or parentheses. Exact -- and n/a indicate unavailable; never convert unavailable values to zero."
+              },
+              "securityType": {
+                "type": "string"
+              },
+              "currentValue": {
+                "type": [
+                  "number",
+                  "string",
+                  "null"
+                ],
+                "description": "Provider numeric measure. Tax-lot display strings can include sign, dollar symbol, grouped thousands, percent suffix or parentheses. Exact -- and n/a indicate unavailable; never convert unavailable values to zero."
+              },
+              "quantity": {
+                "type": [
+                  "number",
+                  "string",
+                  "null"
+                ],
+                "description": "Provider numeric measure. Tax-lot display strings can include sign, dollar symbol, grouped thousands, percent suffix or parentheses. Exact -- and n/a indicate unavailable; never convert unavailable values to zero."
+              },
+              "costBasis": {
+                "type": "string"
+              },
+              "isCostBasisEditable": {
+                "type": "boolean"
+              },
+              "isNotQuotable": {
+                "type": "boolean"
+              },
+              "isCrypto": {
+                "const": false
+              }
+            },
+            "required": [],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "acctNum",
+          "acctType",
+          "cusip",
+          "symbol",
+          "pageNum",
+          "pageSize",
+          "positionDetail"
+        ],
+        "additionalProperties": true
+      },
+      "OpenLotRow": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer"
+          },
+          "dateAcquired": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Mon-DD-YYYY, Various, -- or missing. Various remains explicitly unavailable as a single acquisition date."
+          },
+          "holdingPeriodDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider calendar date, typically MM/DD/YYYY for portfolio REST and Mon-DD-YYYY for tax lots. Normalized tool output uses YYYY-MM-DD. Missing dates remain missing."
+          },
+          "term": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Short or Long when supplied; unavailable remains unknown."
+          },
+          "quantity": {
+            "type": [
+              "number",
+              "string",
+              "null"
+            ],
+            "description": "Provider numeric measure. Tax-lot display strings can include sign, dollar symbol, grouped thousands, percent suffix or parentheses. Exact -- and n/a indicate unavailable; never convert unavailable values to zero."
+          },
+          "currentValue": {
+            "type": [
+              "number",
+              "string",
+              "null"
+            ],
+            "description": "Provider numeric measure. Tax-lot display strings can include sign, dollar symbol, grouped thousands, percent suffix or parentheses. Exact -- and n/a indicate unavailable; never convert unavailable values to zero."
+          },
+          "averageCostBasis": {
+            "type": [
+              "number",
+              "string",
+              "null"
+            ],
+            "description": "Provider numeric measure. Tax-lot display strings can include sign, dollar symbol, grouped thousands, percent suffix or parentheses. Exact -- and n/a indicate unavailable; never convert unavailable values to zero."
+          },
+          "costBasisTotal": {
+            "type": [
+              "number",
+              "string",
+              "null"
+            ],
+            "description": "Provider numeric measure. Tax-lot display strings can include sign, dollar symbol, grouped thousands, percent suffix or parentheses. Exact -- and n/a indicate unavailable; never convert unavailable values to zero."
+          },
+          "totalGainLoss": {
+            "type": [
+              "number",
+              "string",
+              "null"
+            ],
+            "description": "Provider numeric measure. Tax-lot display strings can include sign, dollar symbol, grouped thousands, percent suffix or parentheses. Exact -- and n/a indicate unavailable; never convert unavailable values to zero."
+          },
+          "totalGainLossPct": {
+            "type": [
+              "number",
+              "string",
+              "null"
+            ],
+            "description": "Provider numeric measure. Tax-lot display strings can include sign, dollar symbol, grouped thousands, percent suffix or parentheses. Exact -- and n/a indicate unavailable; never convert unavailable values to zero."
+          },
+          "isWashedSale": {
+            "type": "boolean"
+          },
+          "isNearingLongTerm": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "index",
+          "isWashedSale",
+          "isNearingLongTerm"
+        ],
+        "additionalProperties": true
+      },
+      "OpenLotsResponse": {
+        "type": "object",
+        "properties": {
+          "pagination": {
+            "type": "object",
+            "properties": {
+              "currentPage": {
+                "type": "integer"
+              },
+              "prevPage": {
+                "type": "integer"
+              },
+              "nextPage": {
+                "type": "integer"
+              },
+              "lastPage": {
+                "type": "integer"
+              },
+              "pageSize": {
+                "type": "integer"
+              },
+              "totalLots": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "currentPage",
+              "nextPage",
+              "lastPage",
+              "totalLots"
+            ],
+            "additionalProperties": true
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenLotRow"
+            }
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "metadata": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "pagination",
+          "rows"
         ],
         "additionalProperties": true
       }

@@ -4,7 +4,7 @@ import { chmod, lstat, mkdir, readFile, unlink, writeFile } from 'node:fs/promis
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { FidelityError } from '../domain/errors.js';
 import { localPaths } from '../runtime/paths.js';
-import { responseSchema, type BridgeCommand } from './protocol.js';
+import { commandSchema, responseSchema, type BridgeCommand, type ReadOptions } from './protocol.js';
 import { PortfolioReader, portfolioFailure, type PortfolioOperation } from './portfolio-reader.js';
 import { z } from 'zod';
 import { EventEmitter } from 'node:events';
@@ -239,14 +239,19 @@ export class ExtensionBridge extends PortfolioReader {
       this.peer!.write(encodeMessage(command));
     });
   }
-  protected requestPortfolio(operation: PortfolioOperation, accountId?: string): Promise<unknown> {
+  protected requestPortfolio(
+    operation: PortfolioOperation,
+    accountId?: string,
+    options: ReadOptions = {},
+  ): Promise<unknown> {
     return this.send(
-      {
+      commandSchema.parse({
         type: 'command',
         id: randomUUID(),
         operation,
         ...(accountId === undefined ? {} : { accountId }),
-      },
+        ...options,
+      }),
       25_000,
     );
   }

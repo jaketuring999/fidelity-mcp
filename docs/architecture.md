@@ -39,7 +39,7 @@ private runtime directory. Browser-mode shutdown closes that Chrome instance.
 
 The build bundles the existing Fidelity adapter separately. Only that fixed
 adapter runs in the portfolio page; the local MCP interface still accepts only
-the three normalized portfolio reads. Cookies, CSRF tokens and full account
+the six normalized portfolio reads. Cookies, CSRF tokens and full account
 numbers remain in Chrome. The server retains an account-reference salt for the
 process lifetime, so restarting browser mode changes the references. Reads are
 serialized, validated for schema, freshness and account scope, and recover to
@@ -57,7 +57,7 @@ The CLI starts a loopback HTTP server and an authenticated private socket. MCP c
 
 For authorization, the server asks the extension to establish Fidelity readiness. The extension selects or opens a Fidelity portfolio tab and waits through sign-in and 2FA. It returns a connection proof containing `connected: true`. The server then issues separate MCP credentials to the client.
 
-For portfolio reads, the MCP tools send fixed `list_accounts`, `read_balance` and `read_positions` operations through the bridge. The extension executes the Fidelity adapter in the selected tab's MAIN world, reads its account context, and calls `POST /ftgw/digital/balwebex/api/balances`. Bootstrap configuration can be fetched as text without executing its scripts. The positions adapter uses `POST /ftgw/digital/positions/poswebex/api/positions` with a gzip `pico` envelope and an explicit account list. All-account reads use visible supported person assets, independent of UI selection. The worker retains a random salt in Chrome session storage; SHA-256 of salt and account number supplies opaque references shared by all three tools. Normalized, masked portfolio data returns through the bridge; the server validates account scope and sums balance values in integer cents.
+For portfolio reads, the MCP tools send fixed `list_accounts`, `read_balance` and `read_positions` operations through the bridge. The extension executes the Fidelity adapter in the selected tab's MAIN world, reads its account context, and calls `POST /ftgw/digital/balwebex/api/balances`. Bootstrap configuration can be fetched as text without executing its scripts. The positions adapter uses `POST /ftgw/digital/positions/poswebex/api/positions` with a gzip `pico` envelope and an explicit account list. All-account reads use visible supported person assets, independent of UI selection. The worker retains a random salt in Chrome session storage; SHA-256 of salt and account number supplies opaque references shared by all six tools. Normalized, masked portfolio data returns through the bridge; the server validates account scope and sums balance values in integer cents.
 
 ## Source layout
 
