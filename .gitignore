@@ -12,6 +12,7 @@ test-results/
 .artifacts/
 artifacts/
 .cursor/
+.agents/
 .fidelity-mcp/
 *.sqlite
 *.sqlite-*

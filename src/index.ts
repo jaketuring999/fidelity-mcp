@@ -1,21 +1,43 @@
 #!/usr/bin/env node
 import { createServer } from './server/mcp.js';
 import { ExtensionBridge } from './bridge/extension-bridge.js';
+import { BrowserBridge } from './bridge/browser-bridge.js';
 import { runNativeHost } from './bridge/native-host.js';
 import { runSetup } from './runtime/setup.js';
 import { openChrome } from './runtime/open-chrome.js';
 import { startHttpServer } from './server/http.js';
 import { revokeLocalAccess } from './server/auth.js';
 import { localPaths } from './runtime/paths.js';
+import { parseArgs } from 'node:util';
+
+const usage = `Usage: fidelity-mcp [serve | setup | revoke-access] [--bridge extension|chrome-debugging|browser]
+  --bridge extension         Use the companion extension (default).
+  --bridge chrome-debugging  Attach to everyday Chrome with remote debugging enabled.
+  --bridge browser           Launch a dedicated Chrome profile.
+CLI selection overrides FIDELITY_BRIDGE. Restart the server to switch bridges.`;
+let args: { values: { bridge?: string; help?: boolean }; positionals: string[] };
+try {
+  args = parseArgs({
+    options: { bridge: { type: 'string' }, help: { type: 'boolean' } },
+    allowPositionals: true,
+  });
+} catch {
+  console.error(usage);
+  process.exit(1);
+}
+if (args.values.help) {
+  console.log(usage);
+  process.exit(0);
+}
 
 if (process.platform !== 'darwin' && process.platform !== 'linux') {
   console.error('Fidelity MCP supports macOS and Linux.');
   process.exit(1);
 }
 
-const command = process.argv[2];
+const command = args.positionals[0];
 if (command === 'native-host') {
-  await runNativeHost(process.argv[3]).catch(() => {
+  await runNativeHost(args.positionals[1]).catch(() => {
     console.error('[fidelity-mcp] Native bridge startup failed. Run fidelity-mcp setup again.');
     process.exit(1);
   });
@@ -27,10 +49,19 @@ if (command === 'native-host') {
     'All agent grants revoked. Agents must connect and sign in to Fidelity again if needed.',
   );
 } else if (command && command !== 'serve') {
-  console.error('Usage: fidelity-mcp [serve | setup | revoke-access]');
+  console.error(usage);
   process.exitCode = 1;
 } else {
-  const bridge = new ExtensionBridge();
+  const selected = args.values.bridge ?? process.env.FIDELITY_BRIDGE ?? 'extension';
+  const mode = selected === 'chrome-debugging' ? 'browser-attach' : selected;
+  if (mode !== 'extension' && mode !== 'browser' && mode !== 'browser-attach') {
+    console.error('Bridge must be extension, chrome-debugging, browser or browser-attach.');
+    process.exit(1);
+  }
+  const bridge =
+    mode === 'extension'
+      ? new ExtensionBridge()
+      : new BrowserBridge(undefined, { attach: mode === 'browser-attach' });
   const server = createServer(bridge);
   let http: Awaited<ReturnType<typeof startHttpServer>> | undefined;
   let shutdown: Promise<void> | undefined;
@@ -55,12 +86,12 @@ if (command === 'native-host') {
       base: localPaths().base,
       port: Number(rawPort),
       connectFidelity: async (signal) => {
-        await openChrome();
+        if (mode === 'extension') await openChrome();
         return bridge.connectFidelity(signal);
       },
     });
     console.log(
-      `Fidelity MCP listening: ${http.url}\nTransport: stateless Streamable HTTP\nAdd this URL to your local OAuth-capable MCP client. Chrome opens Fidelity automatically.`,
+      `Fidelity MCP listening: ${http.url}\nBridge: ${mode === 'browser-attach' ? 'chrome-debugging' : mode}\nTransport: stateless Streamable HTTP\nAdd this URL to your local OAuth-capable MCP client. Chrome opens Fidelity automatically.`,
     );
   } catch (error) {
     console.error(

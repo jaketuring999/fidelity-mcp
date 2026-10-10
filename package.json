@@ -34,7 +34,10 @@
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "npm run lint -- --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "start:debugging": "npm start -- --bridge chrome-debugging",
+    "start:extension": "npm start -- --bridge extension",
+    "dev:debugging": "npm run dev -- --bridge chrome-debugging"
   },
   "dependencies": {
     "@better-auth/cimd": "1.7.7",
@@ -45,6 +48,7 @@
     "@prefecthq/fastmcp-ts": "1.7.3",
     "better-auth": "1.7.7",
     "jose": "6.2.3",
+    "playwright": "^1.64.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {

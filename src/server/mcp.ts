@@ -4,7 +4,9 @@ import { FidelityError } from '../domain/errors.js';
 import type { ExtensionBridge } from '../bridge/extension-bridge.js';
 import { accountIdSchema } from '../bridge/protocol.js';
 
-export function createServer(session: ExtensionBridge): FastMCP {
+export function createServer(
+  session: Pick<ExtensionBridge, 'listAccounts' | 'getBalance' | 'getPositions'>,
+): FastMCP {
   const server = new FastMCP({ name: 'fidelity-mcp', version: '0.2.0', logLevel: 'error' });
   const annotations = {
     readOnlyHint: true,
