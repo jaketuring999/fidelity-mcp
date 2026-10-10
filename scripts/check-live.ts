@@ -19,6 +19,10 @@ import {
 } from '@modelcontextprotocol/client';
 
 const serverUrl = `http://127.0.0.1:${process.env.MCP_PORT ?? '3443'}/mcp`;
+const bridgeMode =
+  process.env.FIDELITY_BRIDGE === 'chrome-debugging'
+    ? 'browser-attach'
+    : process.env.FIDELITY_BRIDGE;
 let clientInfo: StoredOAuthClientInformation | undefined;
 let tokens: StoredOAuthTokens | undefined;
 let discovery: OAuthDiscoveryState | undefined;
@@ -77,19 +81,32 @@ const provider: OAuthClientProvider = {
     discovery = value;
   },
   redirectToAuthorization: (url) => {
-    console.log('Checking automatic local OAuth callback with the real Chrome extension.');
+    console.log(
+      `Checking automatic local OAuth callback with ${bridgeMode?.startsWith('browser') ? 'Chrome browser bridge' : 'the real Chrome extension'}.`,
+    );
     void (async () => {
       let next = url;
       for (let redirects = 0; redirects < 5; redirects++) {
         const response = await fetch(next, {
           redirect: 'manual',
-          headers: { Accept: 'text/html', 'Sec-Fetch-Mode': 'navigate' },
           signal: AbortSignal.timeout(300_000),
         });
         console.log(`Local OAuth ${next.pathname}: ${response.status}`);
         if (response.status === 302 && response.headers.has('location')) {
           next = new URL(response.headers.get('location')!, next);
           continue;
+        }
+        if (response.ok && response.headers.get('content-type')?.includes('application/json')) {
+          const body = await response.json();
+          const redirect = z.object({ url: z.string(), redirect: z.literal(true) }).safeParse(body);
+          if (redirect.success) {
+            const target = new URL(redirect.data.url, next);
+            if (target.origin !== new URL(serverUrl).origin || target.pathname !== '/connect')
+              throw new Error('Unexpected local authorization redirect.');
+            next = target;
+            continue;
+          }
+          throw new Error('Unexpected local authorization response.');
         }
         if (!response.ok) throw new Error('Automatic local callback failed.');
         return;
@@ -151,7 +168,9 @@ try {
       'fidelity_get_positions',
     ])
   )
-    throw new Error('Unexpected tool set. Rebuild/reload the extension and server.');
+    throw new Error(
+      'Unexpected tool set. Rebuild and restart the browser bridge or extension and server.',
+    );
   const accountResult = await client.callTool({ name: 'fidelity_list_accounts', arguments: {} });
   const listed = accountsResultSchema.safeParse(accountResult.structuredContent);
   if (accountResult.isError || !listed.success || !listed.data.accounts.length)
@@ -217,16 +236,24 @@ try {
     throw new Error('Revoked test access was still accepted.');
   await mkdir('artifacts', { recursive: true });
   await writeFile(
-    'artifacts/oauth-live.json',
+    bridgeMode?.startsWith('browser')
+      ? bridgeMode === 'browser-attach'
+        ? 'artifacts/browser-attach-live.json'
+        : 'artifacts/browser-live.json'
+      : 'artifacts/oauth-live.json',
     JSON.stringify(
       {
         passed: true,
         generatedAt: new Date().toISOString(),
-        repeat: 'npm run check:live',
+        repeat: bridgeMode?.startsWith('browser')
+          ? `FIDELITY_BRIDGE=${process.env.FIDELITY_BRIDGE} MCP_PORT=${process.env.MCP_PORT ?? '3443'} npm run check:live`
+          : 'npm run check:live',
         endpoint: serverUrl,
         client: 'official MCP SDK v2',
         transport: 'loopback HTTP, stateless 2026-07-28',
-        connection: 'real Chrome extension; automatic Fidelity readiness',
+        connection: bridgeMode?.startsWith('browser')
+          ? `${bridgeMode === 'browser-attach' ? 'everyday Chrome attach' : 'dedicated Chrome'} browser bridge; no extension/native host; automatic Fidelity readiness`
+          : 'real Chrome extension; automatic Fidelity readiness',
         callback: 'local HTTP client followed OAuth redirects',
         tools: toolNames,
         accounts: 'real Fidelity context; identifiers omitted',

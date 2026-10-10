@@ -1,6 +1,6 @@
 # Shared browser/API context
 
-The live implementation is [extension/src/fidelity-api.ts](../../extension/src/fidelity-api.ts). Its serialized function runs in the Chrome page MAIN world. The entry surface is a signed-in `https://digital.fidelity.com/ftgw/digital/portfolio/…` page, rather than an independent bearer-token API.
+The live implementation is [extension/src/fidelity-api.ts](../../extension/src/fidelity-api.ts). Its serialized function runs in the Chrome page MAIN world. The entry surface is a signed-in `https://digital.fidelity.com/ftgw/digital/portfolio/summary` page, rather than an independent bearer-token API.
 
 ## Account identity and selection
 
@@ -46,3 +46,5 @@ Balances return an array, matched by `account.acctNum`. `balance.totalAcctVal` i
 Positions return `totalNoOfAccts`, `acctTot`, and `rowData`. Rows include `ACCOUNT`, `POSITION`, `POSITION_CORE`, `PENDING`, `ACCOUNT_TOTAL`, `SPACER`, and `GRAND_TOTAL`. Only the two position row types become holdings. `sym.name/desc` supplies symbol/description; `qty.val` and `curVal.val` supply quantity/value. `lstPrStk.top.val`, `cstBasStk.top.val`, `todGLStk.top.val`, and `totGLStk.top.val` supply price, total cost basis, daily gain/loss and total gain/loss. Stacked bottom values are secondary display measures; do not substitute them for totals. Core positions can omit quantity/price.
 
 Coverage checks require the requested account set to match provider totals and account headers. Unexpected row types, malformed numbers, duplicate/missing accounts, or non-JSON data fail instead of producing a partial portfolio. Schemas here describe consumed/observed fields and allow additional provider properties; the runtime adapter enforces stricter coverage rules.
+
+The supported entry route is defined in `src/domain/fidelity-page.ts` and shared by both transports. Matching requires that exact origin and pathname; query strings and fragments do not change the route. Other portfolio descendants are not established by the current evidence and are refused before adapter injection. The serialized MAIN-world adapter receives this fixed policy from the transport and rechecks the current location in case navigation occurred after tab selection. This narrows route acceptance; it does not establish a new provider contract.

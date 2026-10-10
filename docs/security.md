@@ -12,6 +12,23 @@ The local listener uses HTTP. Treat it as a local development deployment: produc
 
 ## Data boundary
 
+Everyday Chrome attach mode uses the browser's user-enabled local debugging
+endpoint and native approval prompt. This gives the controller browser-wide
+access, including other signed-in sites, although application code evaluates
+only the bundled adapter in Fidelity portfolio pages. It does not export
+cookies, expose CDP through MCP, or close user tabs on shutdown. Disabling
+remote debugging in Chrome removes the enabled debugging listener. This mode
+requires explicit user setup and Chrome 144+; it is not an extension-equivalent
+host permission boundary.
+
+Experimental browser mode uses a dedicated persistent Chrome profile controlled
+by Playwright through a private pipe. Browser automation has broader capabilities
+than the extension's scoped manifest; our MCP tools expose only the fixed reads
+and do not expose that control interface. Fidelity cookies and credentials stay
+in Chrome, and the profile directory is restricted to the current OS user.
+The same local-client authorization policy and portfolio scope apply. No debug
+TCP listener or cookie export is enabled. Do not commit or publish this profile.
+
 - Sign-in, saved-password autofill, cookies, CSRF headers, full account numbers, and Fidelity request payloads stay inside Chrome.
 - The extension has host access to `https://digital.fidelity.com/*` and exposes fixed readiness, account listing, balance and positions operations, without an arbitrary URL or script gateway.
 - Native messaging and the authenticated private socket carry normalized account metadata, balances, positions and connection proof. Account names and values still constitute sensitive financial data.

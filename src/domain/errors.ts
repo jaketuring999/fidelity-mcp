@@ -1,6 +1,9 @@
 import type { FailureCode } from '../bridge/protocol.js';
 
 type ErrorCode =
+  | 'BROWSER_CONNECTION_FAILED'
+  | 'BROWSER_LAUNCH_FAILED'
+  | 'BROWSER_DISCONNECTED'
   | FailureCode
   | 'EXTENSION_DISCONNECTED'
   | 'BRIDGE_IN_USE'

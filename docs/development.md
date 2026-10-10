@@ -7,8 +7,14 @@ npm ci
 npm run lint
 npm run format:check
 npm run check
+npx playwright install --with-deps chromium
 npm test
 ```
+
+For current remote-debugging development, run `MCP_PORT=3444 npm run dev:debugging`
+after an initial build. Use `npm run start:debugging` to rebuild and run the compiled
+server, or `npm run start:extension` to select the extension. Stop the current server
+before switching. See the README for the Chrome setting and approval prompt.
 
 `check` type-checks the server and extension. `test` builds the app and runs only E2E tests. `npm run dev` runs the server source with tsx; build and load the extension separately.
 
@@ -33,13 +39,29 @@ npm run format     # Apply formatting throughout the authored project.
 | Portfolio E2E | Three MCP tools, real native host, built worker and serialized adapter under simulated Chrome; automatic connection, sign-in/tab recovery, account filters, collision-safe references, precision, cash semantics, gzip/bootstrap, masking and failures | `artifacts/portfolio-e2e.json` |
 | Package E2E   | Actual tarball and Git publication inventory, sensitive-file guards, extracted CLI, extension assets, and native registration in an isolated home                                                                                                      | `artifacts/package-e2e.json`   |
 
-The automated suites use synthetic Fidelity data. They do not establish compatibility with a live Fidelity session or exercise a real Chrome UI. The package test uses the checkout's installed dependencies to run the extracted build. Evidence includes repeat commands and is generated only after the relevant assertions pass; check timestamps and the current test exit status when reviewing local reports.
+The compiled CLI startup E2E runs with an isolated home and no Chrome debugging endpoint. It verifies a failing `--bridge chrome-debugging` startup exits with setup instructions and writes `artifacts/browser-startup-e2e.json`, without connecting to the user browser.
+
+The automated suites use synthetic Fidelity data. They do not establish compatibility with a live Fidelity session. The browser E2E suite uses real headless Chromium with intercepted synthetic HTTP and writes `artifacts/browser-e2e.json`; other suites simulate Chrome. Install test Chromium with the command above; production browser mode uses installed Google Chrome. The package test uses the checkout's installed dependencies to run the extracted build. Evidence includes repeat commands and is generated only after the relevant assertions pass; check timestamps and the current test exit status when reviewing local reports.
 
 Git ignores `artifacts/`, `dist/`, `.cursor/`, package tarballs, dependencies, runtime state, and downloaded Fidelity discovery evidence. These are local output or configuration, not source. CI uploads successful E2E reports as downloadable run artifacts.
 
 ## Live verification
 
+For everyday Chrome attachment, run the server with
+`FIDELITY_BRIDGE=browser-attach MCP_PORT=3444`, enable remote debugging in your
+running Chrome, and approve its connection prompt. Run
+`FIDELITY_BRIDGE=browser-attach MCP_PORT=3444 npm run check:live` for a sanitized
+report at `artifacts/browser-attach-live.json`. Synthetic attach coverage writes
+`artifacts/browser-attach-e2e.json` and includes preservation of the existing
+browser and unrelated tabs on disconnect.
+
 With the server running and the unpacked extension loaded:
+
+For the extension-free prototype, start the server with `FIDELITY_BRIDGE=browser`
+instead; the same live check below works against its OAuth/MCP endpoint. Sign in
+in the dedicated Chrome window. It does not reuse your ordinary Chrome profile.
+Set `FIDELITY_BRIDGE=browser` on the live-check command as well to write the
+sanitized evidence to `artifacts/browser-live.json`.
 
 ```sh
 npm run check:live

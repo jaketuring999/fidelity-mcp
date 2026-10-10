@@ -52,6 +52,9 @@ test(
       | 'negative-balance'
       | 'invalid-number'
       | 'empty-positions'
+      | 'stale-snapshot'
+      | 'duplicate-snapshot'
+      | 'wrong-scope-snapshot'
       | 'unknown-row' = 'normal';
     const calls: Array<{ operation: string; ids: string[] }> = [];
     const frames: unknown[] = [];
@@ -261,6 +264,14 @@ test(
             ...page,
             args: operation.args,
           });
+          // Corrupt normalized snapshots at the transport boundary, after the adapter.
+          if (result.ok) {
+            if (mode === 'stale-snapshot')
+              result.retrievedAt = new Date(Date.now() - 120_000).toISOString();
+            if (mode === 'duplicate-snapshot') result.accounts.push(result.accounts[0]);
+            if (mode === 'wrong-scope-snapshot')
+              result.accounts[0].accountId = 'acct_' + 'e'.repeat(32);
+          }
           return [{ result }];
         },
       },
@@ -419,6 +430,27 @@ test(
         calls.slice(firstRead, firstRead + 5).map((c) => c.ids.length),
         [2, 1, 1, 2, 1],
       );
+      const routeCalls = calls.length;
+      const originalUrl = tab.url;
+      for (const url of [
+        'https://digital.fidelity.com/ftgw/digital/portfolio/summary/extra',
+        'https://digital.fidelity.com/ftgw/digital/portfolio/unvalidated',
+        'https://digital.fidelity.com/other?next=/ftgw/digital/portfolio/summary',
+      ]) {
+        tab.url = url;
+        const rejected = await tool('fidelity_list_accounts');
+        assert.match(JSON.stringify(rejected), /AUTHENTICATION_REQUIRED/);
+        assert.equal(calls.length, routeCalls);
+      }
+      tab.url = originalUrl;
+      page.location = new URL('https://digital.fidelity.com/ftgw/digital/portfolio/unvalidated');
+      assert.match(JSON.stringify(await tool('fidelity_list_accounts')), /AUTHENTICATION_REQUIRED/);
+      assert.equal(
+        calls.length,
+        routeCalls,
+        'Serialized adapter rechecks location after tab selection.',
+      );
+      page.location = new URL(originalUrl);
       const before = calls.length;
       for (const name of ['fidelity_get_account_balance', 'fidelity_get_positions'])
         assert.match(
@@ -457,6 +489,27 @@ test(
       mode = 'empty-positions';
       const empty = (await tool('fidelity_get_positions', { accountId })).structuredContent;
       assert.equal(empty.accounts[0].positions.length, 1);
+      mode = 'normal';
+      for (const failure of ['stale-snapshot', 'duplicate-snapshot'] as const) {
+        mode = failure;
+        for (const name of [
+          'fidelity_list_accounts',
+          'fidelity_get_account_balance',
+          'fidelity_get_positions',
+        ]) {
+          const rejected = await tool(name);
+          assert.equal(rejected.isError, true);
+          assert.equal(rejected.structuredContent, undefined);
+          assert.match(JSON.stringify(rejected), /INVALID_BRIDGE_RESPONSE/);
+        }
+      }
+      mode = 'wrong-scope-snapshot';
+      for (const name of ['fidelity_get_account_balance', 'fidelity_get_positions']) {
+        const rejected = await tool(name, { accountId });
+        assert.equal(rejected.isError, true);
+        assert.equal(rejected.structuredContent, undefined);
+        assert.match(JSON.stringify(rejected), /INVALID_BRIDGE_RESPONSE/);
+      }
       mode = 'normal';
       assert.equal(
         (await tool('fidelity_list_accounts')).structuredContent.accounts[0].accountId,
@@ -502,8 +555,10 @@ test(
               'Cash and margin distinguished.',
               'Unknown accounts do not call the provider.',
               'Invalid inputs, missing values/context, provider failures, partial responses, changed rows and expired sessions fail explicitly.',
+              'Shared portfolio validation rejects stale snapshots, duplicate account references and mismatched single-account scope.',
               'Bootstrap CSRF headers and gzip requests are exercised; credentials, encoded context and full account numbers stay out of native frames.',
               'Reads never navigate or open tabs.',
+              'Exact portfolio route policy rejects descendants and query lookalikes before provider calls; serialized adapter rechecks location.',
             ],
           },
           null,

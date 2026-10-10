@@ -121,6 +121,28 @@ test(
       const env = { ...process.env, HOME: home, XDG_CONFIG_HOME: xdg };
       const cli = (command: string) =>
         run(process.execPath, [entrypoint, command], { cwd: packaged, env });
+      const help = await cli('--help');
+      assert.match(help.stdout, /--bridge chrome-debugging/);
+      assert.match(help.stdout, /--bridge extension/);
+      for (const bridge of ['extension', 'chrome-debugging', 'browser']) {
+        // Verify selection and precedence without starting a real browser or listener.
+        await assert.rejects(
+          run(process.execPath, [entrypoint, 'serve', '--bridge', bridge], {
+            cwd: packaged,
+            env: { ...env, FIDELITY_BRIDGE: 'invalid', MCP_PORT: 'invalid' },
+          }),
+          (error: Error & { stderr?: string }) =>
+            /MCP_PORT must be an integer/.test(error.stderr ?? ''),
+        );
+      }
+      await assert.rejects(
+        run(process.execPath, [entrypoint, 'serve', '--bridge', 'invalid'], {
+          cwd: packaged,
+          env,
+        }),
+        (error: Error & { stderr?: string }) =>
+          /Invalid bridge selection from CLI/.test(error.stderr ?? ''),
+      );
       const extension = join(packaged, 'dist/extension');
       const manifest = JSON.parse(await readFile(join(extension, 'manifest.json'), 'utf8'));
       const digest = createHash('sha256')
@@ -179,6 +201,7 @@ test(
               'Git publication candidates exclude local research, runtime data, private-key files and common credential patterns.',
               'Public file inventory records SHA-256 hashes without file contents.',
               'Extracted CLI resolves bundled extension assets.',
+              'Extracted CLI documents bridge choices, rejects invalid selection, and gives CLI selection precedence over the environment.',
               'Setup registers the stable extension ID in an isolated home.',
               'Private native launcher points to the extracted CLI and executes.',
             ],
