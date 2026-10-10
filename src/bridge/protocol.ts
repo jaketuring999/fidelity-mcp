@@ -37,7 +37,6 @@ export const commandSchema = z.discriminatedUnion('operation', [
 export type BridgeCommand = z.infer<typeof commandSchema>;
 const failureCodeSchema = z.enum([
   'AUTHENTICATION_REQUIRED',
-  'MULTIPLE_FIDELITY_TABS',
   'API_CONTEXT_UNAVAILABLE',
   'API_RESPONSE_CHANGED',
   'BALANCE_UNAVAILABLE',
@@ -66,7 +65,6 @@ export const responseSchema = z.discriminatedUnion('ok', [
 const moneySchema = z.string().regex(/^-?\d{1,15}\.\d{2}$/);
 export const balanceResultSchema = z
   .object({
-    endpoint: z.literal('https://digital.fidelity.com/ftgw/digital/balwebex/api/balances'),
     retrievedAt: z.string().datetime(),
     accounts: z
       .array(
@@ -103,11 +101,8 @@ export const accountsResultSchema = z
   })
   .strict();
 const decimalSchema = z.string().regex(/^-?\d{1,15}(?:\.\d{1,10})?$/);
-const POSITIONS_ENDPOINT =
-  'https://digital.fidelity.com/ftgw/digital/positions/poswebex/api/positions';
 export const positionsResultSchema = z
   .object({
-    endpoint: z.literal(POSITIONS_ENDPOINT),
     retrievedAt: z.string().datetime(),
     accounts: z
       .array(

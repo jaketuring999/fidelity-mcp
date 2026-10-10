@@ -8,16 +8,6 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const run = promisify(execFile);
-const publicDocs = [
-  'docs/architecture.md',
-  'docs/development.md',
-  'docs/security.md',
-  'docs/fidelity/README.md',
-  'docs/fidelity/shared-context.md',
-  'docs/fidelity/openapi.json',
-  'docs/fidelity/examples.json',
-  'docs/fidelity/endpoint-catalog.json',
-];
 const forbiddenFile =
   /(?:^|\/)(?:\.env(?:\..*)?|\.cursor|\.fidelity(?:-mcp)?|artifacts|raw|graphql|node_modules)(?:\/|$)|\.(?:sqlite(?:-.*)?|db(?:-.*)?|pem|key|p12|pfx|har|tgz|log)$/i;
 const sensitiveText = [
@@ -56,31 +46,19 @@ test(
       }>;
       assert.ok(metadata);
       const files = metadata.files.map((file) => file.path).sort();
-      for (const required of [
-        'dist/index.js',
-        'dist/runtime/setup.js',
-        'dist/bridge/native-host.js',
-        'dist/extension/manifest.json',
-        'dist/extension/background.js',
-        'dist/extension/popup.js',
-        'dist/extension/popup.html',
-        'dist/extension/popup.css',
-        'README.md',
-        'docs/development.md',
-      ]) {
+      const { files: configuredFiles } = JSON.parse(await readFile('package.json', 'utf8')) as {
+        files: string[];
+      };
+      const explicitFiles = configuredFiles.filter((file) => !file.includes('*'));
+      const publicDocs = explicitFiles.filter((file) => file.startsWith('docs/'));
+      for (const required of ['dist/index.js', 'dist/extension/background.js', ...explicitFiles]) {
         assert.ok(files.includes(required), `Missing packaged file: ${required}`);
       }
       assert.ok(
         files.every(
           (file) =>
-            [
-              'package.json',
-              'README.md',
-              ...publicDocs,
-              'dist/extension/manifest.json',
-              'dist/extension/popup.html',
-              'dist/extension/popup.css',
-            ].includes(file) || /^dist\/(?:[a-z-]+\/)*[a-z-]+\.js$/.test(file),
+            ['package.json', 'README.md', ...explicitFiles].includes(file) ||
+            /^dist\/(?:[a-z-]+\/)*[a-z-]+\.js$/.test(file),
         ),
         'Only allowlisted runtime code and curated documentation belong in the package.',
       );
@@ -88,8 +66,6 @@ test(
         files.every((file) => !forbiddenFile.test(file)),
         'Package must exclude research, runtime data and credentials.',
       );
-      for (const doc of publicDocs)
-        assert.ok(files.includes(doc), `Missing public documentation: ${doc}`);
       const archive = join(temporary, metadata.filename);
       await run('tar', ['-xzf', archive, '-C', temporary]);
       const packaged = join(temporary, 'package');
@@ -97,13 +73,16 @@ test(
         assertPublicText(file, await readFile(join(packaged, file), 'utf8'));
       // Inspect what Git would publish, including force-added ignored files.
       // This works before the first commit as well as in an existing checkout.
+      const deleted = new Set(
+        (await run('git', ['ls-files', '--deleted', '-z'])).stdout.split('\0'),
+      );
       const candidates = [
         ...new Set(
           (
             await run('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'])
           ).stdout
             .split('\0')
-            .filter(Boolean),
+            .filter((file) => file && !deleted.has(file)),
         ),
       ].sort();
       const publicFiles = [];
@@ -142,8 +121,7 @@ test(
       const env = { ...process.env, HOME: home, XDG_CONFIG_HOME: xdg };
       const cli = (command: string) =>
         run(process.execPath, [entrypoint, command], { cwd: packaged, env });
-      const extension = (await cli('extension-path')).stdout.trim();
-      assert.equal(extension, join(packaged, 'dist/extension'));
+      const extension = join(packaged, 'dist/extension');
       const manifest = JSON.parse(await readFile(join(extension, 'manifest.json'), 'utf8'));
       const digest = createHash('sha256')
         .update(Buffer.from(manifest.key, 'base64'))
@@ -152,14 +130,8 @@ test(
       const extensionId = [...digest]
         .map((byte) => String.fromCharCode(97 + (byte >> 4), 97 + (byte & 15)))
         .join('');
-      for (const asset of [
-        manifest.background.service_worker,
-        manifest.action.default_popup,
-        'popup.js',
-        'popup.css',
-      ]) {
-        assert.ok((await stat(join(extension, asset))).isFile());
-      }
+      assert.equal(manifest.action, undefined, 'Extension must not expose a toolbar popup.');
+      assert.ok((await stat(join(extension, manifest.background.service_worker))).isFile());
       const setup = await cli('setup');
       assert.ok(setup.stdout.includes(extension));
       const registrationDirectory =

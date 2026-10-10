@@ -1,12 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { request } from 'node:http';
 import { spawn } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
-import { loadConfig, writeClientConfig } from '../../src/runtime/config.js';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { startHttpServer } from '../../src/server/http.js';
 import { createServer } from '../../src/server/mcp.js';
 import { ExtensionBridge } from '../../src/bridge/extension-bridge.js';
@@ -90,7 +89,6 @@ test(
     const base = await mkdtemp(join(tmpdir(), 'fidelity-oauth-e2e-'));
     const evidence: string[] = [];
     const bridge = new ExtensionBridge(base, () => {});
-    const config = await loadConfig(base, {});
     const id = 'a'.repeat(32);
     await writeRegistration({
       extensionId: id,
@@ -112,7 +110,7 @@ test(
       nativeLog += String(chunk);
     });
     const decoder = new MessageDecoder((value) => {
-      const command = value as { type: string; operation: string; id: string; clientName: string };
+      const command = value as { type: string; operation: string; id: string };
       if (command.type !== 'command') return;
       if (command.operation === 'connect_fidelity') {
         connections.push(command);
@@ -129,7 +127,6 @@ test(
                   id: command.id,
                   ok: true,
                   result: {
-                    endpoint: 'https://digital.fidelity.com/ftgw/digital/balwebex/api/balances',
                     retrievedAt: new Date().toISOString(),
                     accounts: [
                       {
@@ -152,7 +149,7 @@ test(
       assert.equal(nativeLog, '');
       evidence.push('Real native-host subprocess connected through authenticated private socket.');
       endpoint = await startHttpServer(createServer(bridge), {
-        ...config,
+        base,
         port: 0,
         connectFidelity: (signal) => bridge.connectFidelity(signal),
       });
@@ -412,7 +409,7 @@ test(
       const port = Number(new URL(endpoint.url).port);
       await endpoint.close();
       endpoint = await startHttpServer(createServer(bridge), {
-        ...config,
+        base,
         port,
         connectFidelity: (signal) => bridge.connectFidelity(signal),
       });
@@ -579,11 +576,7 @@ test(
       evidence.push(
         'Official MCP SDK v2 discovers OAuth, registers, exchanges PKCE, calls the modern tool and refreshes automatically.',
       );
-      await writeClientConfig(config.clientConfigPath, endpoint.url);
-      assert.deepEqual(JSON.parse(await readFile(config.clientConfigPath, 'utf8')), {
-        mcpServers: { fidelity: { url: endpoint.url } },
-      });
-      for (const name of ['auth-secret', 'auth.sqlite', 'client-config.json'])
+      for (const name of ['auth-secret', 'auth.sqlite'])
         assert.equal((await stat(join(base, name))).mode & 0o777, 0o600);
       const finalFlow = await begin();
       const finalCallback = await finish(finalFlow, true);
@@ -612,8 +605,20 @@ test(
         ).status,
         400,
       );
+      evidence.push('revoke-access invalidates access and refresh grants.');
+      native.stdin.write(
+        encodeMessage({
+          type: 'response',
+          id: randomUUID(),
+          ok: true,
+          result: {},
+          unexpected: true,
+        }),
+      );
+      await eventually(async () => (!bridge.connected ? true : undefined));
+      await eventually(async () => (bridge.connected ? true : undefined));
       evidence.push(
-        'URL-only config contains no credential; revoke-access invalidates access and refresh grants.',
+        'Malformed extension responses are rejected at the bridge; the native relay reconnects automatically.',
       );
       await mkdir('artifacts', { recursive: true });
       await writeFile(

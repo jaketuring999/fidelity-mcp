@@ -2,12 +2,16 @@
 import { createServer } from './server/mcp.js';
 import { ExtensionBridge } from './bridge/extension-bridge.js';
 import { runNativeHost } from './bridge/native-host.js';
-import { runSetup, extensionPath } from './runtime/setup.js';
+import { runSetup } from './runtime/setup.js';
 import { openChrome } from './runtime/open-chrome.js';
-import { loadConfig, writeClientConfig } from './runtime/config.js';
 import { startHttpServer } from './server/http.js';
 import { revokeLocalAccess } from './server/auth.js';
 import { localPaths } from './runtime/paths.js';
+
+if (process.platform !== 'darwin' && process.platform !== 'linux') {
+  console.error('Fidelity MCP supports macOS and Linux.');
+  process.exit(1);
+}
 
 const command = process.argv[2];
 if (command === 'native-host') {
@@ -16,18 +20,14 @@ if (command === 'native-host') {
     process.exit(1);
   });
 } else if (command === 'setup') {
-  await runSetup(process.argv[3]);
-} else if (command === 'extension-path') {
-  console.log(extensionPath());
+  await runSetup();
 } else if (command === 'revoke-access') {
   await revokeLocalAccess(localPaths().base);
   console.log(
     'All agent grants revoked. Agents must connect and sign in to Fidelity again if needed.',
   );
 } else if (command && command !== 'serve') {
-  console.error(
-    'Usage: fidelity-mcp [serve | setup [extension-id] | extension-path | revoke-access]',
-  );
+  console.error('Usage: fidelity-mcp [serve | setup | revoke-access]');
   process.exitCode = 1;
 } else {
   const bridge = new ExtensionBridge();
@@ -47,18 +47,20 @@ if (command === 'native-host') {
       void stop().finally(() => process.exit(0));
     });
   try {
+    const rawPort = process.env.MCP_PORT ?? '3443';
+    if (!/^\d+$/.test(rawPort) || Number(rawPort) < 1 || Number(rawPort) > 65535)
+      throw new Error('MCP_PORT must be an integer between 1 and 65535.');
     await bridge.start();
-    const config = await loadConfig();
     http = await startHttpServer(server, {
-      ...config,
+      base: localPaths().base,
+      port: Number(rawPort),
       connectFidelity: async (signal) => {
-        if (process.env.FIDELITY_MCP_OPEN_CHROME !== 'false') await openChrome();
+        await openChrome();
         return bridge.connectFidelity(signal);
       },
     });
-    await writeClientConfig(config.clientConfigPath, http.url);
     console.log(
-      `Fidelity MCP listening: ${http.url}\nTransport: stateless Streamable HTTP\nAdd this URL to your local OAuth-capable MCP client. Chrome opens Fidelity automatically.\nURL-only client config: ${config.clientConfigPath}`,
+      `Fidelity MCP listening: ${http.url}\nTransport: stateless Streamable HTTP\nAdd this URL to your local OAuth-capable MCP client. Chrome opens Fidelity automatically.`,
     );
   } catch (error) {
     console.error(

@@ -18,7 +18,7 @@ import {
   type StoredOAuthTokens,
 } from '@modelcontextprotocol/client';
 
-const serverUrl = process.env.FIDELITY_MCP_URL ?? 'http://127.0.0.1:3443/mcp';
+const serverUrl = `http://127.0.0.1:${process.env.MCP_PORT ?? '3443'}/mcp`;
 let clientInfo: StoredOAuthClientInformation | undefined;
 let tokens: StoredOAuthTokens | undefined;
 let discovery: OAuthDiscoveryState | undefined;
@@ -77,32 +77,25 @@ const provider: OAuthClientProvider = {
     discovery = value;
   },
   redirectToAuthorization: (url) => {
-    if (process.argv.includes('--automatic')) {
-      console.log('Checking automatic local OAuth callback with the real Chrome extension.');
-      void (async () => {
-        let next = url;
-        for (let redirects = 0; redirects < 5; redirects++) {
-          const response = await fetch(next, {
-            redirect: 'manual',
-            headers: { Accept: 'text/html', 'Sec-Fetch-Mode': 'navigate' },
-            signal: AbortSignal.timeout(300_000),
-          });
-          console.log(`Local OAuth ${next.pathname}: ${response.status}`);
-          if (response.status === 302 && response.headers.has('location')) {
-            next = new URL(response.headers.get('location')!, next);
-            continue;
-          }
-          if (response.ok && response.headers.get('content-type')?.includes('application/json')) {
-            const result = z.object({ url: z.string().min(1) }).parse(await response.json());
-            next = new URL(result.url, next);
-            continue;
-          }
-          if (!response.ok) throw new Error('Automatic local callback failed.');
-          return;
+    console.log('Checking automatic local OAuth callback with the real Chrome extension.');
+    void (async () => {
+      let next = url;
+      for (let redirects = 0; redirects < 5; redirects++) {
+        const response = await fetch(next, {
+          redirect: 'manual',
+          headers: { Accept: 'text/html', 'Sec-Fetch-Mode': 'navigate' },
+          signal: AbortSignal.timeout(300_000),
+        });
+        console.log(`Local OAuth ${next.pathname}: ${response.status}`);
+        if (response.status === 302 && response.headers.has('location')) {
+          next = new URL(response.headers.get('location')!, next);
+          continue;
         }
-        throw new Error('Too many local OAuth redirects.');
-      })().catch(() => fail(new Error('Automatic local callback failed.')));
-    } else console.log(`Open in Chrome for this one-time read-only check:\n${url.href}`);
+        if (!response.ok) throw new Error('Automatic local callback failed.');
+        return;
+      }
+      throw new Error('Too many local OAuth redirects.');
+    })().catch(() => fail(new Error('Automatic local callback failed.')));
   },
 };
 const client = new Client(
@@ -190,7 +183,6 @@ try {
   for (const args of [{}, { accountId }]) {
     const result = await client.callTool({ name: 'fidelity_get_positions', arguments: args });
     const parsed = positionsResultSchema
-      .omit({ endpoint: true })
       .extend({
         source: z.literal('fidelity_internal_api'),
         scope: z.enum(['all_visible_brokerage_accounts', 'specific_brokerage_account']),
@@ -230,16 +222,12 @@ try {
       {
         passed: true,
         generatedAt: new Date().toISOString(),
-        repeat: process.argv.includes('--automatic')
-          ? 'npm run check:live -- --automatic'
-          : 'npm run check:live',
+        repeat: 'npm run check:live',
         endpoint: serverUrl,
         client: 'official MCP SDK v2',
         transport: 'loopback HTTP, stateless 2026-07-28',
         connection: 'real Chrome extension; automatic Fidelity readiness',
-        callback: process.argv.includes('--automatic')
-          ? 'local HTTP client followed OAuth redirects'
-          : 'Chrome OAuth callback',
+        callback: 'local HTTP client followed OAuth redirects',
         tools: toolNames,
         accounts: 'real Fidelity context; identifiers omitted',
         balance: 'real Fidelity internal API; all and single account; values omitted',

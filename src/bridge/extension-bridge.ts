@@ -19,8 +19,6 @@ import { EventEmitter } from 'node:events';
 const failureMessages = {
   AUTHENTICATION_REQUIRED:
     'Sign in and complete 2FA directly in your Fidelity Chrome tab, then retry.',
-  MULTIPLE_FIDELITY_TABS:
-    'Several Fidelity tabs are open. In the extension popup, select Use this Fidelity tab on the tab you want.',
   API_CONTEXT_UNAVAILABLE:
     'Fidelity request context is unavailable. Reload your signed-in portfolio tab and retry.',
   API_RESPONSE_CHANGED:
@@ -62,29 +60,27 @@ export class ExtensionBridge {
   async start(): Promise<void> {
     await mkdir(this.paths.base, { recursive: true, mode: 0o700 });
     await chmod(this.paths.base, 0o700);
-    if (process.platform !== 'win32') {
-      const existing = await lstat(this.paths.socket).catch((error: NodeJS.ErrnoException) => {
-        if (error.code === 'ENOENT') return null;
-        throw error;
-      });
-      if (existing) {
-        if (!existing.isSocket())
-          throw new FidelityError('BRIDGE_IN_USE', 'Bridge path is occupied by another file.');
-        const active = await new Promise<boolean>((resolve) => {
-          const socket = createConnection(this.paths.socket);
-          socket.once('connect', () => {
-            socket.destroy();
-            resolve(true);
-          });
-          socket.once('error', () => resolve(false));
+    const existing = await lstat(this.paths.socket).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    });
+    if (existing) {
+      if (!existing.isSocket())
+        throw new FidelityError('BRIDGE_IN_USE', 'Bridge path is occupied by another file.');
+      const active = await new Promise<boolean>((resolve) => {
+        const socket = createConnection(this.paths.socket);
+        socket.once('connect', () => {
+          socket.destroy();
+          resolve(true);
         });
-        if (active)
-          throw new FidelityError(
-            'BRIDGE_IN_USE',
-            'Another Fidelity MCP process is running. Close that connection before starting a new one.',
-          );
-        await unlink(this.paths.socket);
-      }
+        socket.once('error', () => resolve(false));
+      });
+      if (active)
+        throw new FidelityError(
+          'BRIDGE_IN_USE',
+          'Another Fidelity MCP process is running. Close that connection before starting a new one.',
+        );
+      await unlink(this.paths.socket);
     }
     this.server = createServer((socket) => this.accept(socket));
     await new Promise<void>((resolve, reject) => {
@@ -103,7 +99,7 @@ export class ExtensionBridge {
     this.server.on('error', () =>
       this.log('Local bridge encountered an error. Restart the MCP connection.'),
     );
-    if (process.platform !== 'win32') await chmod(this.paths.socket, 0o600);
+    await chmod(this.paths.socket, 0o600);
     await writeFile(this.paths.token, this.token, { mode: 0o600 });
     await chmod(this.paths.token, 0o600);
     this.log('Local bridge ready. Connect the Fidelity MCP extension in Chrome.');
@@ -169,7 +165,7 @@ export class ExtensionBridge {
         item.reject(
           new FidelityError(
             'EXTENSION_DISCONNECTED',
-            'Chrome extension disconnected. Open Chrome and click Connect in the extension.',
+            'Chrome extension disconnected. Keep Chrome open; the extension reconnects automatically.',
           ),
         );
       }
@@ -190,7 +186,7 @@ export class ExtensionBridge {
       };
       const timer = setTimeout(() => {
         cleanup();
-        reject(new Error('Open Chrome and connect the Fidelity MCP extension, then retry.'));
+        reject(new Error('Keep Chrome open so the extension can reconnect, then retry.'));
       }, 30_000);
       const cleanup = () => {
         clearTimeout(timer);
@@ -224,7 +220,7 @@ export class ExtensionBridge {
       return Promise.reject(
         new FidelityError(
           'EXTENSION_DISCONNECTED',
-          'Connect the Fidelity MCP extension in Chrome. If needed, run fidelity-mcp setup first.',
+          'Chrome extension is unavailable. Keep Chrome open and run fidelity-mcp setup if needed.',
         ),
       );
     const id = command.id;

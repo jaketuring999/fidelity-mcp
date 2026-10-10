@@ -14,10 +14,10 @@ src/
   server/           OAuth, loopback HTTP, and MCP tool registration
   bridge/           Private socket, native host, and framed message schemas
   domain/           Balance contracts, exact totals, and application errors
-  runtime/          Local paths, configuration, Chrome launch, and setup
+  runtime/          Local paths, Chrome launch, and setup
 extension/
-  src/              Chrome worker, popup controller, and Fidelity API adapter
-  assets/           Manifest and popup HTML/CSS
+  src/              Chrome worker and Fidelity API adapter
+  assets/           Chrome extension manifest
 scripts/            Build orchestration and optional live verification
 tests/             E2E flows with synthetic Fidelity data
 docs/              Architecture, security, and contributor instructions

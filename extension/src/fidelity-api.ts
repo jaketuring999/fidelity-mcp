@@ -223,7 +223,7 @@ export async function fetchFidelityPortfolio(
         });
       }
       if (headers.size !== assets.length) return fail('API_RESPONSE_CHANGED');
-      return { ok: true, endpoint, retrievedAt: new Date().toISOString(), accounts };
+      return { ok: true, retrievedAt: new Date().toISOString(), accounts };
     }
     const endpoint = 'https://digital.fidelity.com/ftgw/digital/balwebex/api/balances';
     let config = page.balExpConfig;
@@ -300,7 +300,7 @@ export async function fetchFidelityPortfolio(
         cashAvailableToWithdraw: money(detail?.availToWithdrawDetail?.cashOnlyAvailToWithdraw),
       });
     }
-    return { ok: true, endpoint, retrievedAt: new Date().toISOString(), accounts };
+    return { ok: true, retrievedAt: new Date().toISOString(), accounts };
   } catch (error) {
     if (error instanceof Error && error.message === 'POSITION_RESPONSE_CHANGED')
       return fail('API_RESPONSE_CHANGED');

@@ -10,8 +10,6 @@
   "files": [
     "dist/**/*.js",
     "dist/extension/manifest.json",
-    "dist/extension/popup.html",
-    "dist/extension/popup.css",
     "docs/architecture.md",
     "docs/development.md",
     "docs/security.md",
