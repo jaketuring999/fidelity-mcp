@@ -7,6 +7,7 @@ import {
   type AuthInfo,
 } from '@modelcontextprotocol/server';
 import { LocalOAuth, PORTFOLIO_SCOPE } from './auth.js';
+import { parseJsonObject } from './json.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 class BodyTooLarge extends Error {}
@@ -40,6 +41,8 @@ export async function startHttpServer(
   mcp: FastMCP,
   options: { base: string; port: number; connectFidelity: (signal: AbortSignal) => Promise<void> },
 ) {
+  if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535)
+    throw new RangeError('Port must be an integer between 0 and 65535.');
   // The listener can run before OAuth initialization finishes.
   // eslint-disable-next-line prefer-const
   let oauth: LocalOAuth | undefined;
@@ -116,7 +119,7 @@ export async function startHttpServer(
         });
         let response: Response;
         if (url.pathname === '/mcp') {
-          JSON.parse(body!);
+          parseJsonObject(body!);
           response = await mcp.fetch(forwarded, { authInfo: authInfo! });
         } else {
           response = (await oauth.handle(forwarded)) ?? denied(404, 'Not found.');

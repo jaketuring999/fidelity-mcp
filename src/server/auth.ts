@@ -14,6 +14,7 @@ import { verifyOAuthQueryParams } from '@better-auth/oauth-provider';
 import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from 'jose';
 import { z } from 'zod';
 import { OAuthError, OAuthErrorCode, type AuthInfo } from '@modelcontextprotocol/server';
+import { parseJsonObject } from './json.js';
 
 export const PORTFOLIO_SCOPE = 'fidelity:portfolio:read';
 const opaque = () => randomBytes(32).toString('base64url');
@@ -23,6 +24,14 @@ const noStore = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
 };
+const rateLimitedRoutes: Record<string, { method: string; limit: number }> = {
+  '/connect': { method: 'GET', limit: 30 },
+  '/auth/oauth2/register': { method: 'POST', limit: 30 },
+  '/auth/oauth2/authorize': { method: 'GET', limit: 120 },
+  '/auth/oauth2/token': { method: 'POST', limit: 120 },
+  '/auth/oauth2/revoke': { method: 'POST', limit: 60 },
+};
+const rateLimitWindowMs = 60_000;
 // Cursor registers this exact hosted callback alongside its loopback callback.
 // Keep remote callbacks restricted to this path, rather than an entire domain.
 const CURSOR_CALLBACK = 'https://www.cursor.com/agents/mcp/oauth/callback';
@@ -120,6 +129,7 @@ export class LocalOAuth {
   private auth: Auth | undefined;
   private database: DatabaseSync | undefined;
   private secret = '';
+  private initialized = false;
   private readonly active = new Set<AbortController>();
   constructor(
     readonly origin: string,
@@ -137,13 +147,21 @@ export class LocalOAuth {
     }
     await chmod(secretPath, 0o600);
     this.secret = (await readFile(secretPath, 'utf8')).trim();
-    if (this.secret.length < 32) throw new Error('Local auth secret is invalid.');
+    if (!/^[A-Za-z0-9_-]{43}$/.test(this.secret))
+      throw new Error('Local auth secret is invalid or corrupted.');
+    const secretBytes = Buffer.from(this.secret, 'base64url');
+    if (secretBytes.length !== 32 || secretBytes.toString('base64url') !== this.secret)
+      throw new Error('Local auth secret is invalid or corrupted.');
     const path = join(this.base, 'auth.sqlite');
     this.database = new DatabaseSync(path);
     await chmod(path, 0o600);
     this.auth = makeAuth(this.origin, this.secret, this.database);
     await (await getMigrations(this.auth.options)).runMigrations();
     await this.auth.$context;
+    this.database.exec(
+      'CREATE TABLE IF NOT EXISTS localOAuthRateLimit (route TEXT NOT NULL, requestedAt INTEGER NOT NULL)',
+    );
+    this.initialized = true;
   }
   async verifyAccessToken(token: string): Promise<AuthInfo> {
     try {
@@ -193,8 +211,17 @@ export class LocalOAuth {
   }
   async handle(request: Request): Promise<Response | undefined> {
     const url = new URL(request.url);
-    const json = (value: unknown, status = 200) =>
-      Response.json(value, { status, headers: noStore });
+    const json = (value: unknown, status = 200, extraHeaders: Record<string, string> = {}) =>
+      Response.json(value, { status, headers: { ...noStore, ...extraHeaders } });
+    if (!this.initialized) return json({ error: 'temporarily_unavailable' }, 503);
+    const routeLimit = rateLimitedRoutes[url.pathname];
+    if (routeLimit?.method === request.method) {
+      const retryAfter = this.recordRequest(url.pathname);
+      if (retryAfter !== undefined)
+        return json({ error: 'temporarily_unavailable' }, 429, {
+          'Retry-After': String(retryAfter),
+        });
+    }
     if (url.pathname === '/connect' && request.method === 'GET') {
       if (!(await verifyOAuthQueryParams(url.searchParams.toString(), this.secret)))
         return json({ error: 'invalid_request' }, 400);
@@ -295,13 +322,7 @@ export class LocalOAuth {
     if (!publicPaths.includes(url.pathname) && !discovery.includes(url.pathname)) return undefined;
     let registrationBody: string | undefined;
     if (url.pathname === '/auth/oauth2/register' && request.method === 'POST') {
-      const data = (await request.clone().json()) as {
-        redirect_uris?: unknown;
-        token_endpoint_auth_method?: unknown;
-        grant_types?: unknown;
-        client_name?: unknown;
-        application_type?: unknown;
-      };
+      const data = parseJsonObject(await request.clone().text());
       if (
         !Array.isArray(data.redirect_uris) ||
         !data.redirect_uris.length ||
@@ -336,6 +357,34 @@ export class LocalOAuth {
     response.headers.delete('set-cookie');
     return response;
   }
+  private recordRequest(path: string): number | undefined {
+    const limit = rateLimitedRoutes[path]!.limit;
+    const now = Date.now();
+    const database = this.database!;
+    database.exec('BEGIN IMMEDIATE');
+    try {
+      const cutoff = now - rateLimitWindowMs;
+      database.prepare('DELETE FROM localOAuthRateLimit WHERE requestedAt <= ?').run(cutoff);
+      const usage = database
+        .prepare(
+          'SELECT COUNT(*) AS count, MIN(requestedAt) AS oldest FROM localOAuthRateLimit WHERE route = ? AND requestedAt > ?',
+        )
+        .get(path, cutoff) as { count: number; oldest: number | null };
+      let retryAfter: number | undefined;
+      if (usage.count >= limit && usage.oldest !== null) {
+        retryAfter = Math.max(1, Math.ceil((usage.oldest + rateLimitWindowMs - now) / 1000));
+      } else {
+        database
+          .prepare('INSERT INTO localOAuthRateLimit (route, requestedAt) VALUES (?, ?)')
+          .run(path, now);
+      }
+      database.exec('COMMIT');
+      return retryAfter;
+    } catch (error) {
+      database.exec('ROLLBACK');
+      throw error;
+    }
+  }
   close(): void {
     for (const controller of this.active) controller.abort();
     this.active.clear();
@@ -346,9 +395,18 @@ export class LocalOAuth {
 export function revokeLocalAccess(base: string): void {
   const database = new DatabaseSync(join(base, 'auth.sqlite'));
   try {
-    database.exec(
-      'BEGIN IMMEDIATE; DELETE FROM oauthConsent; DELETE FROM oauthAccessToken; DELETE FROM oauthRefreshToken; DELETE FROM verification; DELETE FROM session; COMMIT;',
-    );
+    database.exec('BEGIN IMMEDIATE');
+    try {
+      database.prepare('DELETE FROM oauthConsent').run();
+      database.prepare('DELETE FROM oauthAccessToken').run();
+      database.prepare('DELETE FROM oauthRefreshToken').run();
+      database.prepare('DELETE FROM verification').run();
+      database.prepare('DELETE FROM session').run();
+      database.exec('COMMIT');
+    } catch (error) {
+      database.exec('ROLLBACK');
+      throw error;
+    }
   } finally {
     database.close();
   }
