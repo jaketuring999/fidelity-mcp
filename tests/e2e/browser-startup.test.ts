@@ -73,3 +73,105 @@ test('compiled CLI explains how to enable unavailable Chrome remote debugging', 
     await rm(home, { recursive: true, force: true });
   }
 });
+
+test('compiled CLI validates configuration before creating a browser or runtime state', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'fidelity-config-startup-'));
+  const cases = [
+    {
+      name: 'unknown CLI bridge',
+      args: ['--bridge', 'typo'],
+      bridge: 'extension',
+      port: '3443',
+      expected: 'Invalid bridge selection from CLI',
+    },
+    {
+      name: 'empty CLI bridge',
+      args: ['--bridge', ''],
+      bridge: 'extension',
+      port: '3443',
+      expected: 'Invalid bridge selection from CLI',
+    },
+    {
+      name: 'unknown environment bridge',
+      args: [],
+      bridge: 'typo',
+      port: '3443',
+      expected: 'Invalid bridge selection from environment',
+    },
+    {
+      name: 'empty environment bridge',
+      args: [],
+      bridge: '',
+      port: '3443',
+      expected: 'Invalid bridge selection from environment',
+    },
+    {
+      name: 'CLI overrides invalid environment',
+      args: ['--bridge', 'extension'],
+      bridge: 'typo',
+      port: '0',
+      expected: 'MCP_PORT must be an integer',
+    },
+    ...['extension', 'chrome-debugging', 'browser-attach', 'browser'].map((bridge) => ({
+      name: `explicit ${bridge}`,
+      args: [],
+      bridge,
+      port: '0',
+      expected: 'MCP_PORT must be an integer',
+    })),
+    {
+      name: 'absent bridge uses documented default',
+      args: [],
+      bridge: undefined,
+      port: '0',
+      expected: 'MCP_PORT must be an integer',
+    },
+  ];
+  try {
+    for (const scenario of cases) {
+      const env = {
+        ...process.env,
+        HOME: home,
+        FIDELITY_BRIDGE: scenario.bridge,
+        MCP_PORT: scenario.port,
+      };
+      if (scenario.bridge === undefined) delete env.FIDELITY_BRIDGE;
+      await run(process.execPath, [resolve('dist/index.js'), 'serve', ...scenario.args], {
+        env,
+        timeout: 5000,
+      }).then(
+        () => assert.fail(`Unexpected startup: ${scenario.name}`),
+        (error: Error & { code?: number; stderr?: string; stdout?: string; killed?: boolean }) => {
+          assert.equal(error.code, 1, scenario.name);
+          assert.equal(error.killed, false, scenario.name);
+          assert.ok(error.stderr?.includes(scenario.expected), scenario.name);
+          assert.equal(error.stdout, '', scenario.name);
+        },
+      );
+    }
+    const { readdir } = await import('node:fs/promises');
+    assert.deepEqual(
+      await readdir(home),
+      [],
+      'Configuration errors must not create runtime state.',
+    );
+    await mkdir('artifacts', { recursive: true });
+    await writeFile(
+      'artifacts/config-startup-e2e.json',
+      JSON.stringify(
+        {
+          passed: true,
+          generatedAt: new Date().toISOString(),
+          repeat: 'npm run build && npx tsx --test tests/e2e/browser-startup.test.ts',
+          checks: cases.map(({ name }) => name),
+          boundary:
+            'Compiled CLI rejects bad bridge/port configuration before transport startup; accepted bridge selections are followed by an intentional invalid port.',
+        },
+        null,
+        2,
+      ) + '\n',
+    );
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});

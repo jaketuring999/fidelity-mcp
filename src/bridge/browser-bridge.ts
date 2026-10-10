@@ -7,18 +7,10 @@ import { localPaths } from '../runtime/paths.js';
 import { FidelityError } from '../domain/errors.js';
 import { balanceResultSchema, responseSchema } from './protocol.js';
 import { PortfolioReader, portfolioFailure, type PortfolioOperation } from './portfolio-reader.js';
+import { fidelityPage, portfolioUrl, isPortfolioUrl } from '../domain/fidelity-page.js';
 
-const PORTFOLIO = 'https://digital.fidelity.com/ftgw/digital/portfolio/summary';
 function isPortfolio(page: Page): boolean {
-  try {
-    const url = new URL(page.url());
-    return (
-      url.origin === 'https://digital.fidelity.com' &&
-      url.pathname.startsWith('/ftgw/digital/portfolio/')
-    );
-  } catch {
-    return false;
-  }
+  return isPortfolioUrl(page.url());
 }
 
 // Playwright owns a dedicated profile or attaches to user-approved everyday Chrome.
@@ -57,7 +49,7 @@ export class BrowserBridge extends PortfolioReader {
         this.attachedBrowser = undefined;
         this.context = undefined;
         throw new FidelityError(
-          'PORTFOLIO_UNAVAILABLE',
+          'BROWSER_CONNECTION_FAILED',
           [
             'Could not connect to Chrome remote debugging. Chrome may be closed, remote debugging may be disabled, or its connection prompt was not approved.',
             'To connect with --bridge chrome-debugging:',
@@ -82,7 +74,7 @@ export class BrowserBridge extends PortfolioReader {
       });
     } catch {
       throw new FidelityError(
-        'PORTFOLIO_UNAVAILABLE',
+        'BROWSER_LAUNCH_FAILED',
         'Could not launch the dedicated Chrome profile. Close another browser-mode process and check Chrome is installed.',
       );
     }
@@ -90,7 +82,7 @@ export class BrowserBridge extends PortfolioReader {
   private async page(create: boolean): Promise<Page> {
     if (!this.context?.browser()?.isConnected())
       throw new FidelityError(
-        'PORTFOLIO_UNAVAILABLE',
+        'BROWSER_DISCONNECTED',
         'Chrome connection closed. Restart the browser bridge.',
       );
     if (this.selected && !this.selected.isClosed() && isPortfolio(this.selected))
@@ -103,7 +95,7 @@ export class BrowserBridge extends PortfolioReader {
         'Sign in to Fidelity in the connected Chrome window.',
       );
     this.selected = await this.context.newPage();
-    await this.selected.goto(PORTFOLIO, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await this.selected.goto(portfolioUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     return this.selected;
   }
   private async snapshot(
@@ -124,7 +116,7 @@ export class BrowserBridge extends PortfolioReader {
           let timer;
           try {
             return await Promise.race([
-              FidelityReadAdapter.fetchFidelityPortfolio(${JSON.stringify(operation)},${JSON.stringify(accountId ?? null)},${JSON.stringify(this.salt)}),
+              FidelityReadAdapter.fetchFidelityPortfolio(${JSON.stringify(operation)},${JSON.stringify(accountId ?? null)},${JSON.stringify(this.salt)},${JSON.stringify(fidelityPage)}),
               new Promise(resolve => { timer = setTimeout(() => resolve({ok:false,code:'PORTFOLIO_UNAVAILABLE'}), 25000); })
             ]);
           } finally { clearTimeout(timer); }

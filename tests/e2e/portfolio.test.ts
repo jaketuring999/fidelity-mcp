@@ -430,6 +430,27 @@ test(
         calls.slice(firstRead, firstRead + 5).map((c) => c.ids.length),
         [2, 1, 1, 2, 1],
       );
+      const routeCalls = calls.length;
+      const originalUrl = tab.url;
+      for (const url of [
+        'https://digital.fidelity.com/ftgw/digital/portfolio/summary/extra',
+        'https://digital.fidelity.com/ftgw/digital/portfolio/unvalidated',
+        'https://digital.fidelity.com/other?next=/ftgw/digital/portfolio/summary',
+      ]) {
+        tab.url = url;
+        const rejected = await tool('fidelity_list_accounts');
+        assert.match(JSON.stringify(rejected), /AUTHENTICATION_REQUIRED/);
+        assert.equal(calls.length, routeCalls);
+      }
+      tab.url = originalUrl;
+      page.location = new URL('https://digital.fidelity.com/ftgw/digital/portfolio/unvalidated');
+      assert.match(JSON.stringify(await tool('fidelity_list_accounts')), /AUTHENTICATION_REQUIRED/);
+      assert.equal(
+        calls.length,
+        routeCalls,
+        'Serialized adapter rechecks location after tab selection.',
+      );
+      page.location = new URL(originalUrl);
       const before = calls.length;
       for (const name of ['fidelity_get_account_balance', 'fidelity_get_positions'])
         assert.match(
@@ -537,6 +558,7 @@ test(
               'Shared portfolio validation rejects stale snapshots, duplicate account references and mismatched single-account scope.',
               'Bootstrap CSRF headers and gzip requests are exercised; credentials, encoded context and full account numbers stay out of native frames.',
               'Reads never navigate or open tabs.',
+              'Exact portfolio route policy rejects descendants and query lookalikes before provider calls; serialized adapter rechecks location.',
             ],
           },
           null,

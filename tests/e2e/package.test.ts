@@ -140,7 +140,8 @@ test(
           cwd: packaged,
           env,
         }),
-        (error: Error & { stderr?: string }) => /Bridge must be/.test(error.stderr ?? ''),
+        (error: Error & { stderr?: string }) =>
+          /Invalid bridge selection from CLI/.test(error.stderr ?? ''),
       );
       const extension = join(packaged, 'dist/extension');
       const manifest = JSON.parse(await readFile(join(extension, 'manifest.json'), 'utf8'));

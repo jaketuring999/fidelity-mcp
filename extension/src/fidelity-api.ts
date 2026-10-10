@@ -1,3 +1,4 @@
+import type { FidelityPagePolicy } from '../../src/domain/fidelity-page.js';
 import type {
   AccountInfo,
   AccountsSnapshot,
@@ -14,12 +15,10 @@ export async function fetchFidelityPortfolio(
   operation: ReadOperation,
   accountId: string | null | undefined,
   salt: string,
+  pagePolicy: FidelityPagePolicy,
 ): Promise<any> {
   const fail = (code: FailureCode) => ({ ok: false as const, code });
-  if (
-    location.origin !== 'https://digital.fidelity.com' ||
-    !location.pathname.startsWith('/ftgw/digital/portfolio/')
-  )
+  if (location.origin !== pagePolicy.origin || location.pathname !== pagePolicy.portfolioPath)
     return fail('AUTHENTICATION_REQUIRED');
   if (
     !/^[a-f0-9]{64}$/.test(salt) ||

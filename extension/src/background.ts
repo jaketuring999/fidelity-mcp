@@ -1,8 +1,15 @@
 import { fetchFidelityPortfolio, type ReadOperation } from './fidelity-api.js';
 import type { FailureCode } from '../../src/bridge/protocol.js';
 
+import {
+  fidelityPage,
+  portfolioUrl,
+  fidelityTabPattern,
+  isFidelityUrl,
+  isPortfolioUrl,
+} from '../../src/domain/fidelity-page.js';
+
 const HOST = 'com.fidelity_mcp.bridge';
-const PORTFOLIO = 'https://digital.fidelity.com/ftgw/digital/portfolio/summary';
 let nativePort: chrome.runtime.Port | undefined;
 let queue: Promise<unknown> = Promise.resolve();
 class TabError extends Error {
@@ -10,28 +17,21 @@ class TabError extends Error {
     super(code);
   }
 }
-function isFidelity(url?: string): boolean {
-  try {
-    return Boolean(url && new URL(url).origin === 'https://digital.fidelity.com');
-  } catch {
-    return false;
-  }
-}
 async function chooseTab(create: boolean): Promise<chrome.tabs.Tab> {
   const { selectedTab } = await chrome.storage.session.get('selectedTab');
   if (typeof selectedTab === 'number') {
     const tab = await chrome.tabs.get(selectedTab).catch(() => undefined);
-    if (tab && isFidelity(tab.url)) return tab;
+    if (tab && isFidelityUrl(tab.url)) return tab;
     await chrome.storage.session.remove('selectedTab');
   }
-  const tabs = await chrome.tabs.query({ url: 'https://digital.fidelity.com/*' });
+  const tabs = await chrome.tabs.query({ url: fidelityTabPattern });
   tabs.sort(
     (a, b) =>
       Number(Boolean(b.active)) - Number(Boolean(a.active)) ||
       (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0),
   );
   if (tabs[0]) return tabs[0];
-  if (create) return chrome.tabs.create({ url: PORTFOLIO });
+  if (create) return chrome.tabs.create({ url: portfolioUrl });
   throw new TabError('AUTHENTICATION_REQUIRED');
 }
 let saltPromise: Promise<string> | undefined;
@@ -57,13 +57,11 @@ async function readPortfolio(
 ): Promise<unknown> {
   tab ??= await chooseTab(false);
   if (tab.id === undefined || !tab.url) throw new TabError('AUTHENTICATION_REQUIRED');
-  const url = new URL(tab.url);
-  if (!isFidelity(tab.url) || !url.pathname.startsWith('/ftgw/digital/portfolio/'))
-    throw new TabError('AUTHENTICATION_REQUIRED');
+  if (!isPortfolioUrl(tab.url)) throw new TabError('AUTHENTICATION_REQUIRED');
   const results = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: fetchFidelityPortfolio,
-    args: [operation, accountId ?? null, await accountSalt()],
+    args: [operation, accountId ?? null, await accountSalt(), fidelityPage],
     world: 'MAIN',
   });
   const result = results[0]?.result;
@@ -83,7 +81,7 @@ async function connectFidelity(
   await chrome.storage.session.set({ selectedTab: id });
   await chrome.tabs.update(id, {
     active: true,
-    ...(!tab.url?.includes('/ftgw/digital/portfolio/') ? { url: PORTFOLIO } : {}),
+    ...(!isPortfolioUrl(tab.url) ? { url: portfolioUrl } : {}),
   });
   await chrome.windows.update(tab.windowId, { focused: true });
   // Poll this same tab across sign-in/2FA redirects. Neither credentials nor the

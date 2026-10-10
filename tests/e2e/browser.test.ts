@@ -117,7 +117,7 @@ for (const attach of [false, true])
             await route.abort();
             return;
           }
-          if (url.pathname.startsWith('/ftgw/digital/portfolio/')) {
+          if (request.isNavigationRequest()) {
             await route.fulfill({
               contentType: 'text/html',
               body: `<script>window.PortSumContainer={PicoService:{getPersonContext:async()=>(${JSON.stringify({ person: { assets } })})}};</script>`,
@@ -236,6 +236,23 @@ for (const attach of [false, true])
           JSON.stringify([all, one, holdings, accounts]),
           /TEST1234|NEXT1234|HIDE5678|synthetic-csrf|synthetic-customer|picoString/,
         );
+        const providerCalls = calls.length;
+        for (const url of [
+          'https://digital.fidelity.com/ftgw/digital/portfolio/summary/extra',
+          'https://digital.fidelity.com/ftgw/digital/portfolio/unvalidated',
+          'https://digital.fidelity.com/ftgw/digital/portfolio/summary-fake',
+          'https://digital.fidelity.com/other?next=/ftgw/digital/portfolio/summary',
+        ]) {
+          await replacement.goto(url);
+          const rejected = await tool('fidelity_list_accounts');
+          assert.equal(rejected.isError, true);
+          assert.match(JSON.stringify(rejected), /AUTHENTICATION_REQUIRED/);
+          assert.equal(calls.length, providerCalls, 'Unknown routes must not call the provider.');
+        }
+        await replacement.goto(
+          'https://digital.fidelity.com/ftgw/digital/portfolio/summary?test=1#accounts',
+        );
+        assert.equal((await tool('fidelity_list_accounts')).isError, undefined);
         await replacement.goto('https://example.test/').catch(() => {});
         assert.equal((await tool('fidelity_list_accounts')).isError, true);
         assert.ok(blocked > 0);
@@ -280,7 +297,8 @@ for (const attach of [false, true])
                 'incomplete responses and session expiry',
                 'shared portfolio validation rejects stale snapshots for all three tools',
                 'reload and closed-tab recovery',
-                'foreign origin refused',
+                'foreign origin and unvalidated descendant/lookalike routes refused without provider calls',
+                'verified route accepts query and fragment',
                 'browser closure fails safely',
                 'credentials and full identifiers absent from tool results',
               ],

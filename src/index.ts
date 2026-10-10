@@ -8,6 +8,7 @@ import { openChrome } from './runtime/open-chrome.js';
 import { startHttpServer } from './server/http.js';
 import { revokeLocalAccess } from './server/auth.js';
 import { localPaths } from './runtime/paths.js';
+import { resolveServeConfig } from './runtime/config.js';
 import { parseArgs } from 'node:util';
 
 const usage = `Usage: fidelity-mcp [serve | setup | revoke-access] [--bridge extension|chrome-debugging|browser]
@@ -52,12 +53,14 @@ if (command === 'native-host') {
   console.error(usage);
   process.exitCode = 1;
 } else {
-  const selected = args.values.bridge ?? process.env.FIDELITY_BRIDGE ?? 'extension';
-  const mode = selected === 'chrome-debugging' ? 'browser-attach' : selected;
-  if (mode !== 'extension' && mode !== 'browser' && mode !== 'browser-attach') {
-    console.error('Bridge must be extension, chrome-debugging, browser or browser-attach.');
+  let config: ReturnType<typeof resolveServeConfig>;
+  try {
+    config = resolveServeConfig(args.values.bridge, process.env);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : 'Invalid server configuration.');
     process.exit(1);
   }
+  const mode = config.bridge;
   const bridge =
     mode === 'extension'
       ? new ExtensionBridge()
@@ -78,20 +81,17 @@ if (command === 'native-host') {
       void stop().finally(() => process.exit(0));
     });
   try {
-    const rawPort = process.env.MCP_PORT ?? '3443';
-    if (!/^\d+$/.test(rawPort) || Number(rawPort) < 1 || Number(rawPort) > 65535)
-      throw new Error('MCP_PORT must be an integer between 1 and 65535.');
     await bridge.start();
     http = await startHttpServer(server, {
       base: localPaths().base,
-      port: Number(rawPort),
+      port: config.port,
       connectFidelity: async (signal) => {
         if (mode === 'extension') await openChrome();
         return bridge.connectFidelity(signal);
       },
     });
     console.log(
-      `Fidelity MCP listening: ${http.url}\nBridge: ${mode === 'browser-attach' ? 'chrome-debugging' : mode}\nTransport: stateless Streamable HTTP\nAdd this URL to your local OAuth-capable MCP client. Chrome opens Fidelity automatically.`,
+      `Fidelity MCP listening: ${http.url}\nBridge: ${mode === 'browser-attach' ? 'chrome-debugging' : mode} (${config.source})\nTransport: stateless Streamable HTTP\nAdd this URL to your local OAuth-capable MCP client. Chrome opens Fidelity automatically.`,
     );
   } catch (error) {
     console.error(
