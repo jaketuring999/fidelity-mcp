@@ -8,7 +8,7 @@ For tool development, start with the [offline Fidelity API reference](docs/fidel
 
 ## Requirements
 
-- Node.js 22.13 or newer and npm.
+- Node.js 24.0 or newer and npm.
 - Google Chrome 120 or newer on macOS or Linux.
 - A local MCP client with Streamable HTTP, OAuth discovery, and a supported callback: loopback HTTP/HTTPS or Cursor's exact `https://www.cursor.com/agents/mcp/oauth/callback` URL.
 
