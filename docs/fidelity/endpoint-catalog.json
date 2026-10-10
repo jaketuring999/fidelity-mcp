@@ -1,0 +1,268 @@
+{
+  "scope": "Validated balances and positions contracts plus source-discovered positions routes. Raw evidence is optional local-only research; source discovery does not establish a working endpoint.",
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/balwebex/api/balances",
+      "status": "live_validated",
+      "requestSchema": "BalanceRequest",
+      "responseSchema": "BalanceResponse",
+      "evidence": {
+        "file": "../../extension/src/fidelity-api.ts"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/openlots",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 377128
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/openlots-json",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 377205
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/openorders",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 377279
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/earnings",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 377352
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/positions",
+      "status": "live_validated",
+      "requestSchema": "PositionsRequest",
+      "responseSchema": "PositionsResponse",
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 377426
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/spspositions",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 377504
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/fundperformance",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 377579
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/state/save",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 377650
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/state/session/save",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 377723
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/state/custom/retrieve",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 377807
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/changecoreeligibility",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 377895
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/quotescard",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 377980
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/news/headlines",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 378053
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/newscolumn",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 378132
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/news/story",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 378206
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/mftopten",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 378283
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/closedpositions",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 378361
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/pzn",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 378434
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/pzn/feedback",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 378495
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/ftgw/digital/positions/poswebex/api/multicontent",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 378568
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/closedlots",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 378642
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/quotescolumn",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 378879
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/ftgw/digital/positions/poswebex/api/cryptometadata",
+      "status": "source_discovered",
+      "requestSchema": null,
+      "responseSchema": null,
+      "evidence": {
+        "file": "raw/009adff600a3-posweb.1183c9b2491ae6824e3b.bundle.js",
+        "offset": 378799
+      }
+    }
+  ]
+}

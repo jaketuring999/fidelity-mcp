@@ -1,0 +1,144 @@
+{
+  "notice": "Entirely synthetic, no Fidelity customer data or runtime tokens.",
+  "balance": {
+    "decodedPico": [
+      {
+        "account": {
+          "acctNum": "DEMO0001",
+          "acctType": "Brokerage",
+          "acctSubType": "DEMO"
+        },
+        "acctTradeAttrDetail": {},
+        "acctLegalAttrDetail": {},
+        "acctPreferenceDetail": {
+          "name": "Synthetic brokerage"
+        },
+        "acctMrgnOptionSpreadsDetail": {
+          "hasMargin": false,
+          "hasMarginDebtProtection": false
+        }
+      }
+    ],
+    "request": {
+      "picoString": "H4sIAAAAAAAAE22NsQ6DMAxEf6XyzEDXbK3oVgoSbFUHE0yICgkyZkCIf69AESzdrPfuzu8FUGs/OQG1n/KaelCQPNIsjuMrRDss54FAwZ39lxgNBVxMVTBbHtYQZqzpJsIJCdoO1BLEkwx2/0TO1BCT03QYcNhvw8XspCWx+lIdz0MrZeOyQax3xcCE9XiWWxxTZGMdqAa7kaKTJFRJzl5Ib83g1/XzA5x9y4wKAQAA"
+    },
+    "response": [
+      {
+        "account": {
+          "acctNum": "DEMO0001",
+          "acctType": "Brokerage",
+          "acctSubType": "DEMO"
+        },
+        "balance": {
+          "totalAcctVal": "125.00",
+          "brokBalDetail": {
+            "availToTradeDetail": {
+              "cashAvailForTrade": "25.00"
+            },
+            "cashDetail": {
+              "canShowCashSettled": true,
+              "cashSettled": "25.00"
+            },
+            "availToWithdrawDetail": {
+              "cashOnlyAvailToWithdraw": "25.00"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "positions": {
+    "decodedPico": {
+      "accounts": [
+        {
+          "accountId": "DEMO0001",
+          "acctType": "Brokerage",
+          "acctSubType": "DEMO",
+          "brokerageAccount": true
+        }
+      ],
+      "hasSPS": false,
+      "pznFPLAccts": []
+    },
+    "request": {
+      "accts": [
+        "DEMO0001"
+      ],
+      "pico": "H4sIAAAAAAAAE6tWSkxOzi/NKylWsoquhnE8U5SslFxcff0NDAwMlXRAwiUhlQWpSlZKTkX52alFiempUOHg0iSoDEi9ko5SEkyBI8QsJauSotLU2lgdpYzE4uCAYCWrtMSc4lQdpYKqPLcAH8fkZLDdsbUA1FeY9osAAAA=",
+      "pzn": [],
+      "allTreatments": [],
+      "externalCustId": "SYNTHETIC_CONTEXT",
+      "isBasketEnable": false,
+      "isGroupBySecurityEnable": false,
+      "isRefresh": true,
+      "settings": {
+        "groupBy": "0",
+        "filter": ""
+      },
+      "toggles": {}
+    },
+    "response": {
+      "totalNoOfAccts": 1,
+      "acctTot": [
+        {
+          "acctNum": "DEMO0001",
+          "currentVal": "125.00"
+        }
+      ],
+      "rowData": [
+        {
+          "rowType": "ACCOUNT",
+          "actNum": "DEMO0001"
+        },
+        {
+          "rowType": "POSITION",
+          "actNum": "DEMO0001",
+          "sym": {
+            "name": "DEMO",
+            "desc": "Synthetic holding"
+          },
+          "qty": {
+            "val": "2"
+          },
+          "curVal": {
+            "val": "100.00"
+          },
+          "lstPrStk": {
+            "top": {
+              "val": "50.00"
+            }
+          },
+          "cstBasStk": {
+            "top": {
+              "val": "90.00"
+            }
+          },
+          "meta": {
+            "holdingType": "Cash"
+          }
+        },
+        {
+          "rowType": "POSITION_CORE",
+          "actNum": "DEMO0001",
+          "sym": {
+            "name": "DEMO_CASH",
+            "desc": "Synthetic cash"
+          },
+          "curVal": {
+            "val": "25.00"
+          },
+          "meta": {
+            "holdingType": "Cash"
+          }
+        },
+        {
+          "rowType": "ACCOUNT_TOTAL",
+          "actNum": "DEMO0001"
+        },
+        {
+          "rowType": "GRAND_TOTAL"
+        }
+      ]
+    }
+  }
+}

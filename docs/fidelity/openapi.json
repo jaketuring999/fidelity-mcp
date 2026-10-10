@@ -1,0 +1,1055 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Fidelity browser API — reconstructed reference",
+    "version": "2026-10-09",
+    "description": "Unofficial partial contract derived from the adapter, live read validation, and saved public client code. This is not Fidelity Swagger or a complete server schema. Synthetic fixtures only. Authentication remains in Chrome."
+  },
+  "servers": [
+    {
+      "url": "https://digital.fidelity.com"
+    }
+  ],
+  "x-authentication": "Existing signed-in Chrome session, credentials include, runtime CSRF tokens. No reusable credentials in this reference.",
+  "paths": {
+    "/ftgw/digital/balwebex/": {
+      "get": {
+        "summary": "Balance bootstrap",
+        "description": "Session-bound HTML/text containing runtime configuration. Parse expected quoted fields; do not execute downloaded script.",
+        "responses": {
+          "200": {
+            "description": "HTML bootstrap",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Authentication required"
+          }
+        },
+        "x-evidence": "adapter_and_live_validation",
+        "x-schema-coverage": "bootstrap_fields_only"
+      }
+    },
+    "/ftgw/digital/positions/poswebex/": {
+      "get": {
+        "summary": "Positions bootstrap",
+        "description": "Session-bound HTML/text containing runtime configuration. Parse expected quoted fields; do not execute downloaded script.",
+        "responses": {
+          "200": {
+            "description": "HTML bootstrap",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Authentication required"
+          }
+        },
+        "x-evidence": "adapter_and_live_validation",
+        "x-schema-coverage": "bootstrap_fields_only",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "snippet",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "const": "Y"
+            }
+          }
+        ]
+      }
+    },
+    "/ftgw/digital/balwebex/api/balances": {
+      "post": {
+        "operationId": "balances",
+        "summary": "balances",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Use live bootstrap ctoken. Never save tokens."
+          },
+          {
+            "in": "header",
+            "name": "whereUsed",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Current portfolio URL."
+          },
+          {
+            "in": "header",
+            "name": "virtualmode",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "virtualbwe",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BalanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Observed successful provider response; documented fields are a subset.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BalanceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Authentication required"
+          }
+        },
+        "x-evidence": "adapter_and_live_validation",
+        "x-schema-coverage": "partial"
+      }
+    },
+    "/ftgw/digital/positions/poswebex/api/positions": {
+      "post": {
+        "operationId": "positions",
+        "summary": "positions",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Use live bootstrap ctoken. Never save tokens."
+          },
+          {
+            "in": "header",
+            "name": "whereUsed",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Current portfolio URL."
+          },
+          {
+            "in": "header",
+            "name": "virtualmode",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "virtualpwe",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Preset-View",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PositionsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Observed successful provider response; documented fields are a subset.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PositionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Authentication required"
+          }
+        },
+        "x-evidence": "adapter_and_live_validation",
+        "x-schema-coverage": "partial"
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PersonContext": {
+        "type": "object",
+        "properties": {
+          "person": {
+            "type": "object",
+            "properties": {
+              "assets": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Asset"
+                }
+              }
+            },
+            "required": [
+              "assets"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "person"
+        ],
+        "additionalProperties": true
+      },
+      "Asset": {
+        "type": "object",
+        "properties": {
+          "acctNum": {
+            "type": "string"
+          },
+          "acctType": {
+            "type": "string"
+          },
+          "acctSubType": {
+            "type": "string"
+          },
+          "acctSubTypeDesc": {
+            "type": "string"
+          },
+          "preferenceDetail": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "isHidden": {
+                "type": "boolean"
+              }
+            },
+            "required": [],
+            "additionalProperties": true
+          },
+          "acctTradeAttrDetail": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": true
+          },
+          "acctLegalAttrDetail": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": true
+          },
+          "acctFeature": {
+            "type": "object",
+            "properties": {
+              "featureDetails": {
+                "type": "object",
+                "properties": {
+                  "established": {
+                    "type": "object",
+                    "properties": {
+                      "marginOptionSpreadsDetail": {
+                        "type": "object",
+                        "properties": {
+                          "hasMargin": {
+                            "type": "boolean"
+                          },
+                          "hasMarginDebtProtection": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [],
+                        "additionalProperties": true
+                      }
+                    },
+                    "required": [],
+                    "additionalProperties": true
+                  }
+                },
+                "required": [],
+                "additionalProperties": true
+              }
+            },
+            "required": [],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "acctNum",
+          "acctType"
+        ],
+        "additionalProperties": true
+      },
+      "BalanceDecodedPico": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "account": {
+              "type": "object",
+              "properties": {
+                "acctNum": {
+                  "type": "string"
+                },
+                "acctType": {
+                  "type": "string"
+                },
+                "acctSubType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "acctNum"
+              ],
+              "additionalProperties": true
+            },
+            "acctTradeAttrDetail": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": true
+            },
+            "acctLegalAttrDetail": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": true
+            },
+            "acctPreferenceDetail": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [],
+              "additionalProperties": true
+            },
+            "acctMrgnOptionSpreadsDetail": {
+              "type": "object",
+              "properties": {
+                "hasMargin": {
+                  "type": "boolean"
+                },
+                "hasMarginDebtProtection": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "hasMargin",
+                "hasMarginDebtProtection"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "required": [
+            "account",
+            "acctPreferenceDetail",
+            "acctMrgnOptionSpreadsDetail"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "BalanceRequest": {
+        "type": "object",
+        "properties": {
+          "picoString": {
+            "type": "string",
+            "description": "base64(gzip(UTF-8 JSON BalanceDecodedPico)); no static credentials"
+          }
+        },
+        "required": [
+          "picoString"
+        ],
+        "additionalProperties": true
+      },
+      "BalanceResponse": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "account": {
+              "type": "object",
+              "properties": {
+                "acctNum": {
+                  "type": "string"
+                },
+                "acctType": {
+                  "type": "string"
+                },
+                "acctSubType": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "acctNum"
+              ],
+              "additionalProperties": true
+            },
+            "balance": {
+              "type": "object",
+              "properties": {
+                "totalAcctVal": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                },
+                "brokBalDetail": {
+                  "type": "object",
+                  "properties": {
+                    "availToTradeDetail": {
+                      "type": "object",
+                      "properties": {
+                        "cashAvailForTrade": {
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                        }
+                      },
+                      "required": [],
+                      "additionalProperties": true
+                    },
+                    "cashDetail": {
+                      "type": "object",
+                      "properties": {
+                        "canShowCashSettled": {
+                          "type": "boolean"
+                        },
+                        "cashSettled": {
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                        }
+                      },
+                      "required": [],
+                      "additionalProperties": true
+                    },
+                    "availToWithdrawDetail": {
+                      "type": "object",
+                      "properties": {
+                        "cashOnlyAvailToWithdraw": {
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                        }
+                      },
+                      "required": [],
+                      "additionalProperties": true
+                    }
+                  },
+                  "required": [],
+                  "additionalProperties": true
+                }
+              },
+              "required": [
+                "totalAcctVal"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "required": [
+            "account",
+            "balance"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "PositionsDecodedPico": {
+        "type": "object",
+        "properties": {
+          "accounts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "accountId": {
+                  "type": "string"
+                },
+                "acctType": {
+                  "type": "string"
+                },
+                "acctSubType": {
+                  "type": "string"
+                },
+                "brokerageAccount": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "accountId",
+                "acctType",
+                "brokerageAccount"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "hasSPS": {
+            "type": "boolean"
+          },
+          "pznFPLAccts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "accounts",
+          "hasSPS",
+          "pznFPLAccts"
+        ],
+        "additionalProperties": true
+      },
+      "PositionsRequest": {
+        "type": "object",
+        "properties": {
+          "accts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pico": {
+            "type": "string",
+            "description": "base64(gzip(UTF-8 JSON PositionsDecodedPico))"
+          },
+          "pzn": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": true
+            }
+          },
+          "allTreatments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": true
+            }
+          },
+          "externalCustId": {
+            "type": "string",
+            "description": "Opaque runtime posweb.user value; never persist it."
+          },
+          "isBasketEnable": {
+            "type": "boolean"
+          },
+          "isGroupBySecurityEnable": {
+            "type": "boolean"
+          },
+          "isRefresh": {
+            "type": "boolean"
+          },
+          "settings": {
+            "type": "object",
+            "properties": {
+              "groupBy": {
+                "type": "string"
+              },
+              "filter": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "additionalProperties": true
+          },
+          "toggles": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "accts",
+          "pico",
+          "pzn",
+          "allTreatments",
+          "externalCustId",
+          "isBasketEnable",
+          "isGroupBySecurityEnable",
+          "isRefresh",
+          "settings",
+          "toggles"
+        ],
+        "additionalProperties": true
+      },
+      "PositionRow": {
+        "type": "object",
+        "properties": {
+          "rowType": {
+            "type": "string",
+            "enum": [
+              "ACCOUNT",
+              "POSITION",
+              "POSITION_CORE",
+              "PENDING",
+              "ACCOUNT_TOTAL",
+              "SPACER",
+              "GRAND_TOTAL"
+            ]
+          },
+          "actNum": {
+            "type": "string"
+          },
+          "actNam": {
+            "type": "string"
+          },
+          "sym": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "cusip": {
+                "type": "string"
+              },
+              "desc": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "additionalProperties": true
+          },
+          "qty": {
+            "type": "object",
+            "properties": {
+              "val": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+              },
+              "disp": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "val"
+            ],
+            "additionalProperties": true
+          },
+          "curVal": {
+            "type": "object",
+            "properties": {
+              "val": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+              },
+              "disp": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "val"
+            ],
+            "additionalProperties": true
+          },
+          "lstPrStk": {
+            "type": "object",
+            "properties": {
+              "top": {
+                "type": "object",
+                "properties": {
+                  "val": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                  },
+                  "disp": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "val"
+                ],
+                "additionalProperties": true
+              },
+              "bottom": {
+                "type": "object",
+                "properties": {
+                  "val": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                  },
+                  "disp": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "val"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [],
+            "additionalProperties": true
+          },
+          "cstBasStk": {
+            "type": "object",
+            "properties": {
+              "top": {
+                "type": "object",
+                "properties": {
+                  "val": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                  },
+                  "disp": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "val"
+                ],
+                "additionalProperties": true
+              },
+              "bottom": {
+                "type": "object",
+                "properties": {
+                  "val": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                  },
+                  "disp": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "val"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [],
+            "additionalProperties": true
+          },
+          "todGLStk": {
+            "type": "object",
+            "properties": {
+              "top": {
+                "type": "object",
+                "properties": {
+                  "val": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                  },
+                  "disp": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "val"
+                ],
+                "additionalProperties": true
+              },
+              "bottom": {
+                "type": "object",
+                "properties": {
+                  "val": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                  },
+                  "disp": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "val"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [],
+            "additionalProperties": true
+          },
+          "totGLStk": {
+            "type": "object",
+            "properties": {
+              "top": {
+                "type": "object",
+                "properties": {
+                  "val": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                  },
+                  "disp": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "val"
+                ],
+                "additionalProperties": true
+              },
+              "bottom": {
+                "type": "object",
+                "properties": {
+                  "val": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                  },
+                  "disp": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "val"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [],
+            "additionalProperties": true
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "holdingType": {
+                "type": "string"
+              },
+              "securityType": {
+                "type": "string"
+              },
+              "securitySubType": {
+                "type": "string"
+              },
+              "isEligibleForLots": {
+                "type": "boolean"
+              }
+            },
+            "required": [],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "rowType"
+        ],
+        "additionalProperties": true
+      },
+      "PositionsResponse": {
+        "type": "object",
+        "properties": {
+          "responseTime": {},
+          "totalNoOfAccts": {
+            "type": "integer"
+          },
+          "rowData": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PositionRow"
+            }
+          },
+          "acctTot": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "acctNum": {
+                  "type": "string"
+                },
+                "currentVal": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                },
+                "todayChange": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                },
+                "todayChangePct": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "description": "Provider decimal value. Adapter validates syntax and converts to decimal string."
+                }
+              },
+              "required": [
+                "acctNum"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "grandTotBalance": {}
+        },
+        "required": [
+          "totalNoOfAccts",
+          "rowData",
+          "acctTot"
+        ],
+        "additionalProperties": true
+      }
+    }
+  }
+}
