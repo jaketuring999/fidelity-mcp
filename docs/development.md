@@ -1,6 +1,6 @@
 # Development
 
-Run commands from the repository root with Node.js 22.13 or newer:
+Run commands from the repository root with Node.js 24.0 or newer:
 
 ```sh
 npm ci

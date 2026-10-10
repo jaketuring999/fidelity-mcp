@@ -22,7 +22,7 @@
     "docs/fidelity/endpoint-catalog.json"
   ],
   "engines": {
-    "node": ">=22.13"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
