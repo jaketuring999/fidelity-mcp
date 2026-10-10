@@ -12,16 +12,14 @@ execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconf
 await mkdir(new URL('../dist/extension/', import.meta.url), { recursive: true });
 await build({
   absWorkingDir: root,
-  entryPoints: ['extension/src/background.ts', 'extension/src/popup.ts'],
+  entryPoints: ['extension/src/background.ts'],
   outdir: 'dist/extension',
   bundle: true,
   platform: 'browser',
   format: 'esm',
   target: 'chrome120',
 });
-for (const name of ['manifest.json', 'popup.html', 'popup.css']) {
-  await copyFile(
-    new URL(`../extension/assets/${name}`, import.meta.url),
-    new URL(`../dist/extension/${name}`, import.meta.url),
-  );
-}
+await copyFile(
+  new URL('../extension/assets/manifest.json', import.meta.url),
+  new URL('../dist/extension/manifest.json', import.meta.url),
+);

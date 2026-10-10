@@ -10,9 +10,5 @@
   "background": {
     "service_worker": "background.js",
     "type": "module"
-  },
-  "action": {
-    "default_title": "Fidelity MCP",
-    "default_popup": "popup.html"
   }
 }

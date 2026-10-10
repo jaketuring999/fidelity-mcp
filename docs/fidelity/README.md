@@ -19,7 +19,7 @@ The schemas document consumed fields and permit additional provider properties. 
 
 Existing developer checkouts can also contain `raw/`, `graphql/`, `source-manifest.json`, `source-routes.json`, `source-http-calls.json`, `graphql-index.json`, and `inventory.md`. These downloaded application bundles, verbatim client documents, and generated indexes are ignored by Git and excluded from the package. They are intentionally absent from a public clone. The manifest records public source URLs, sizes and SHA-256 hashes; catalog offsets refer to the exact saved bundles. Old `verification.json` reports are historical local evidence, not a current test result.
 
-Use that saved evidence for offline discovery when available. Inspect complete callers and request construction, rather than inferring semantics from a route name. Client GraphQL selections are not server introspection, and operation names alone do not establish read-only behavior. The one-off download/index/spec generator scripts have been removed; maintain the compact contracts alongside the adapters.
+Use that saved evidence for offline discovery when available. Inspect complete callers and request construction, rather than inferring semantics from a route name. Client GraphQL selections are not server introspection, and operation names alone do not establish read-only behavior. Maintain the compact contracts alongside the adapters.
 
 When local evidence is unavailable or insufficient, inspect live Chrome to validate the candidate and its request/response contract. Never save cookies, tokens, account identifiers, customer responses, HAR files or screenshots containing financial data in the public reference.
 

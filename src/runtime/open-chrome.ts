@@ -6,9 +6,7 @@ export function openChrome(): Promise<void> {
     const child =
       process.platform === 'darwin'
         ? spawn('open', ['-a', 'Google Chrome'], { stdio: 'ignore' })
-        : process.platform === 'win32'
-          ? spawn('cmd.exe', ['/d', '/c', 'start', '', 'chrome'], { stdio: 'ignore' })
-          : spawn('google-chrome', [], { stdio: 'ignore', detached: true });
+        : spawn('google-chrome', [], { stdio: 'ignore', detached: true });
     child.once('error', reject);
     child.once('spawn', () => {
       child.unref();

@@ -24,7 +24,7 @@ npm run setup
 ```
 
 1. Open `chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and choose the printed `dist/extension` directory.
-2. Run `npm start` and leave the server running. Use **Connect** in the extension popup if needed.
+2. Run `npm start` and leave the server running. The extension connects automatically.
 3. Add the server URL to your MCP client's configuration:
 
 ```json
@@ -41,27 +41,24 @@ npm run setup
 
 Local clients receive portfolio read access when the extension confirms a working Fidelity session. There is no client approval step. The client stores and refreshes its own MCP tokens; Fidelity credentials, cookies, and 2FA codes stay in Chrome. See [security and authorization](docs/security.md) for the trust boundary.
 
-The popup's **Use this Fidelity tab** action selects a tab explicitly. Otherwise the extension prefers the previously selected tab, then an active or recently used Fidelity tab. Portfolio calls reuse that session without navigating.
+The extension has no popup or manual controls. It reuses the tab chosen during authorization while that tab remains available. Otherwise it chooses an active Fidelity tab, then the most recently used one, or opens Fidelity during authorization if none exists. Portfolio calls reuse the session without navigating.
 
-Setup writes native-host registration for the current OS user. Runtime state and a URL-only `client-config.json` live under `~/.fidelity-mcp/`. Keep this checkout at a stable path, and rerun setup after moving it or changing Node. Reload the unpacked extension after rebuilding. Ctrl+C stops the server and leaves Chrome open.
+Setup writes native-host registration for the current OS user. Runtime state lives under `~/.fidelity-mcp/`. Keep this checkout at a stable path, and rerun setup after moving it or changing Node. Reload the unpacked extension after rebuilding. Ctrl+C stops the server and leaves Chrome open.
 
 ## Commands and configuration
 
-| Command                             | Purpose                                         |
-| ----------------------------------- | ----------------------------------------------- |
-| `npm run setup`                     | Build and register the Chrome native host.      |
-| `npm start`                         | Build and run the local server.                 |
-| `node dist/index.js serve`          | Run an existing build.                          |
-| `node dist/index.js extension-path` | Print the unpacked extension directory.         |
-| `node dist/index.js revoke-access`  | Revoke all local MCP access and refresh grants. |
+| Command                            | Purpose                                         |
+| ---------------------------------- | ----------------------------------------------- |
+| `npm run setup`                    | Build and register the Chrome native host.      |
+| `npm start`                        | Build and run the local server.                 |
+| `node dist/index.js serve`         | Run an existing build.                          |
+| `node dist/index.js revoke-access` | Revoke all local MCP access and refresh grants. |
 
 After revocation, clients must reconnect. An expired Fidelity session returns `AUTHENTICATION_REQUIRED`; sign in again in Chrome to resume portfolio reads.
 
-| Variable                   | Default                     | Purpose                                                                       |
-| -------------------------- | --------------------------- | ----------------------------------------------------------------------------- |
-| `MCP_PORT`                 | `3443`                      | Loopback HTTP port, from 1 to 65535. Update your client URL when changing it. |
-| `FIDELITY_MCP_OPEN_CHROME` | enabled                     | Set to `false` to suppress bringing Chrome forward during authorization.      |
-| `FIDELITY_MCP_URL`         | `http://127.0.0.1:3443/mcp` | Server URL for the optional live verification script.                         |
+| Variable   | Default | Purpose                                                                       |
+| ---------- | ------- | ----------------------------------------------------------------------------- |
+| `MCP_PORT` | `3443`  | Loopback HTTP port, from 1 to 65535. Update your client URL when changing it. |
 
 ## Tools and account selection
 

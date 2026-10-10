@@ -46,11 +46,3 @@ Balances return an array, matched by `account.acctNum`. `balance.totalAcctVal` i
 Positions return `totalNoOfAccts`, `acctTot`, and `rowData`. Rows include `ACCOUNT`, `POSITION`, `POSITION_CORE`, `PENDING`, `ACCOUNT_TOTAL`, `SPACER`, and `GRAND_TOTAL`. Only the two position row types become holdings. `sym.name/desc` supplies symbol/description; `qty.val` and `curVal.val` supply quantity/value. `lstPrStk.top.val`, `cstBasStk.top.val`, `todGLStk.top.val`, and `totGLStk.top.val` supply price, total cost basis, daily gain/loss and total gain/loss. Stacked bottom values are secondary display measures; do not substitute them for totals. Core positions can omit quantity/price.
 
 Coverage checks require the requested account set to match provider totals and account headers. Unexpected row types, malformed numbers, duplicate/missing accounts, or non-JSON data fail instead of producing a partial portfolio. Schemas here describe consumed/observed fields and allow additional provider properties; the runtime adapter enforces stricter coverage rules.
-
-## Other shared surfaces captured
-
-`window.poswebex._poswebStore._store.getState()` contains view data/settings, including `rowData`, `slvData`, `basketData`, `groupBySecurityData`, `presetColumnsOrder`, `columnSortDetails`, `userSelectedTab`, and `settings`. It is a UI store, not a freshness guarantee.
-
-Saved portfolio/trade sources contain production URL literals for `/ftgw/digital/picoserver/api/graphql`, `/ftgw/digital/pico/api`, `/ftgw/digital/portfolio/api/graphql`, documents and client-performance GraphQL services. We use `PicoService` rather than reverse-engineering its transport for current accounts. Client GraphQL templates preserve selected response fields; no server introspection/schema dump has been performed.
-
-The earlier network discovery also observed activity history/pending, performance benchmark/state/risk, and YTD-tax initialization/summary families. Their request/response schemas are not captured here and they remain unvalidated research leads.

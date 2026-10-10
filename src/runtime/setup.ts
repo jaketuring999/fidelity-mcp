@@ -5,10 +5,10 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HOST_NAME, localPaths } from './paths.js';
 
-export function extensionPath(): string {
+function extensionPath(): string {
   return fileURLToPath(new URL('../extension', import.meta.url));
 }
-export function extensionId(key: string): string {
+function extensionId(key: string): string {
   return [...createHash('sha256').update(Buffer.from(key, 'base64')).digest().subarray(0, 16)]
     .map((byte) => String.fromCharCode(97 + (byte >> 4), 97 + (byte & 15)))
     .join('');
@@ -57,15 +57,11 @@ export async function writeRegistration(options: {
   );
   return path;
 }
-export async function runSetup(id?: string): Promise<void> {
-  if (process.platform === 'win32')
-    throw new Error(
-      'Native-host setup currently supports macOS and Linux. A Windows launcher is not implemented yet.',
-    );
+export async function runSetup(): Promise<void> {
   const manifest = JSON.parse(await readFile(join(extensionPath(), 'manifest.json'), 'utf8')) as {
     key: string;
   };
-  const chosenId = id ?? extensionId(manifest.key);
+  const chosenId = extensionId(manifest.key);
   const manifestDirectory =
     process.platform === 'darwin'
       ? join(homedir(), 'Library/Application Support/Google/Chrome/NativeMessagingHosts')
@@ -81,6 +77,6 @@ export async function runSetup(id?: string): Promise<void> {
     node: process.execPath,
   });
   console.log(
-    `Chrome bridge registered: ${path}\nExtension ID: ${chosenId}\n\nOpen chrome://extensions, enable Developer mode, and Load unpacked:\n${extensionPath()}\n\nThen run the MCP server and click Connect in the extension.`,
+    `Chrome bridge registered: ${path}\nExtension ID: ${chosenId}\n\nOpen chrome://extensions, enable Developer mode, and Load unpacked:\n${extensionPath()}\n\nThen run the MCP server. The extension connects automatically.`,
   );
 }

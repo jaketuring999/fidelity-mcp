@@ -4,8 +4,6 @@ import type { FailureCode } from '../../src/bridge/protocol.js';
 const HOST = 'com.fidelity_mcp.bridge';
 const PORTFOLIO = 'https://digital.fidelity.com/ftgw/digital/portfolio/summary';
 let nativePort: chrome.runtime.Port | undefined;
-let connected = false;
-let status = 'Click Connect to link your local MCP server.';
 let queue: Promise<unknown> = Promise.resolve();
 class TabError extends Error {
   constructor(public readonly code: FailureCode) {
@@ -27,7 +25,6 @@ async function chooseTab(create: boolean): Promise<chrome.tabs.Tab> {
     await chrome.storage.session.remove('selectedTab');
   }
   const tabs = await chrome.tabs.query({ url: 'https://digital.fidelity.com/*' });
-  if (tabs.length > 1 && !create) throw new TabError('MULTIPLE_FIDELITY_TABS');
   tabs.sort(
     (a, b) =>
       Number(Boolean(b.active)) - Number(Boolean(a.active)) ||
@@ -36,13 +33,6 @@ async function chooseTab(create: boolean): Promise<chrome.tabs.Tab> {
   if (tabs[0]) return tabs[0];
   if (create) return chrome.tabs.create({ url: PORTFOLIO });
   throw new TabError('AUTHENTICATION_REQUIRED');
-}
-async function openFidelity(): Promise<void> {
-  const tab = await chooseTab(true);
-  if (tab.id === undefined) throw new TabError('BALANCE_UNAVAILABLE');
-  await chrome.storage.session.set({ selectedTab: tab.id });
-  await chrome.tabs.update(tab.id, { active: true });
-  await chrome.windows.update(tab.windowId, { focused: true });
 }
 let saltPromise: Promise<string> | undefined;
 function accountSalt(): Promise<string> {
@@ -96,7 +86,6 @@ async function connectFidelity(
     ...(!tab.url?.includes('/ftgw/digital/portfolio/') ? { url: PORTFOLIO } : {}),
   });
   await chrome.windows.update(tab.windowId, { focused: true });
-  status = 'Sign in to Fidelity if prompted. Your agent connects automatically.';
   // Poll this same tab across sign-in/2FA redirects. Neither credentials nor the
   // readiness check's balances are sent to the local server.
   while (Date.now() < expiresAt && nativePort === port) {
@@ -105,7 +94,6 @@ async function connectFidelity(
     try {
       await readPortfolio('read_balance', undefined, current);
       if (nativePort !== port || Date.now() >= expiresAt) break;
-      status = 'Fidelity connected. Your agent is ready.';
       return { connected: true };
     } catch (error) {
       if (error instanceof TabError && error.code === 'API_RESPONSE_CHANGED') throw error;
@@ -117,32 +105,21 @@ async function connectFidelity(
 
 function ensureNative(): void {
   if (nativePort) return;
-  status = 'Connecting to the local bridge…';
   const port = chrome.runtime.connectNative(HOST);
   nativePort = port;
   port.onDisconnect.addListener(() => {
     void chrome.runtime.lastError; // Consume the error without logging provider text.
     if (nativePort !== port) return;
     nativePort = undefined;
-    connected = false;
-    status = 'Bridge unavailable. Run fidelity-mcp setup, start the server, then Connect.';
   });
   port.onMessage.addListener((message: unknown) => {
     const data = message as {
       type?: unknown;
-      connected?: unknown;
       id?: unknown;
       operation?: unknown;
       expiresAt?: unknown;
       accountId?: unknown;
     };
-    if (data?.type === 'status' && typeof data.connected === 'boolean') {
-      connected = data.connected;
-      status = connected
-        ? 'Connected to your local MCP server.'
-        : 'Waiting for your local MCP server to start.';
-      return;
-    }
     if (
       data?.type !== 'command' ||
       typeof data.id !== 'string' ||
@@ -202,52 +179,9 @@ function ensureNative(): void {
             port.postMessage({ type: 'response', id: data.id, ok: false, code });
         }
       })
-      .catch(() => {
-        status = 'Chrome connection interrupted. Click Connect.';
-      });
+      .catch(() => {});
   });
 }
-chrome.runtime.onMessage.addListener((message: unknown, sender, reply) => {
-  // Only extension-owned pages may control the bridge.
-  if (
-    sender.id !== chrome.runtime.id ||
-    !sender.url?.startsWith(`chrome-extension://${chrome.runtime.id}/`)
-  )
-    return;
-  const type = (message as { type?: unknown })?.type;
-  if (type === 'status') {
-    reply({ connected, status });
-    return;
-  }
-  if (type === 'connect') {
-    ensureNative();
-    reply({ connected, status });
-    return;
-  }
-  if (type === 'open') {
-    void openFidelity()
-      .then(() => reply({ ok: true }))
-      .catch(() =>
-        reply({ ok: false, message: 'Choose a Fidelity tab with Use this Fidelity tab.' }),
-      );
-    return true;
-  }
-  if (type === 'select') {
-    void chrome.tabs
-      .query({ active: true, currentWindow: true })
-      .then(async ([tab]) => {
-        if (!tab || tab.id === undefined || !isFidelity(tab.url)) {
-          reply({ ok: false, message: 'Open the popup from your Fidelity tab first.' });
-          return;
-        }
-        await chrome.storage.session.set({ selectedTab: tab.id });
-        reply({ ok: true });
-      })
-      .catch(() => reply({ ok: false, message: 'Could not select this tab.' }));
-    return true;
-  }
-  return;
-});
 chrome.runtime.onInstalled.addListener(() => {
   ensureNative();
   void chrome.alarms.create('reconnect', { periodInMinutes: 0.5 });
@@ -256,3 +190,6 @@ chrome.runtime.onStartup.addListener(ensureNative);
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'reconnect') ensureNative();
 });
+
+// Reconnect whenever Chrome starts or wakes this worker, without manual controls.
+ensureNative();

@@ -2,7 +2,7 @@ import { encodeMessage, MessageDecoder } from './framing.js';
 import { createConnection, type Socket } from 'node:net';
 import { readFile } from 'node:fs/promises';
 import { localPaths } from '../runtime/paths.js';
-import { commandSchema, responseSchema } from './protocol.js';
+import { commandSchema } from './protocol.js';
 
 export async function runNativeHost(origin: string | undefined, base?: string): Promise<void> {
   const paths = localPaths(base);
@@ -25,9 +25,8 @@ export async function runNativeHost(origin: string | undefined, base?: string): 
     socket?.destroy();
   };
   const input = new MessageDecoder((message) => {
-    const parsed = responseSchema.safeParse(message);
-    if (!parsed.success) throw new Error('Invalid extension response');
-    if (ready && socket && !socket.destroyed) socket.write(encodeMessage(parsed.data));
+    // The bridge validates responses; this process only relays bounded frames.
+    if (ready && socket && !socket.destroyed) socket.write(encodeMessage(message));
   });
   process.stdin.on('data', (chunk: Buffer) => {
     try {
@@ -50,7 +49,6 @@ export async function runNativeHost(origin: string | undefined, base?: string): 
     const token = await readFile(paths.token, 'utf8').catch(() => '');
     if (stopped) return;
     if (!/^[0-9a-f]{64}$/.test(token)) {
-      send({ type: 'status', connected: false });
       timer = setTimeout(() => void connect(), 1000);
       return;
     }
@@ -59,7 +57,6 @@ export async function runNativeHost(origin: string | undefined, base?: string): 
     const decoder = new MessageDecoder((message) => {
       if ((message as { type?: unknown })?.type === 'connected') {
         ready = true;
-        send({ type: 'status', connected: true });
         return;
       }
       const parsed = commandSchema.safeParse(message);
@@ -78,7 +75,6 @@ export async function runNativeHost(origin: string | undefined, base?: string): 
     peer.on('close', () => {
       ready = false;
       if (!stopped) {
-        send({ type: 'status', connected: false });
         timer = setTimeout(() => void connect(), 1000);
       }
     });

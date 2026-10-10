@@ -14,7 +14,7 @@ import { writeRegistration } from '../../src/runtime/setup.js';
 import { encodeMessage, MessageDecoder } from '../../src/bridge/framing.js';
 
 test(
-  'three MCP tools → real native host → bundled worker → serialized adapter: all accounts, one account, masking and failures',
+  'three MCP tools → real native host → bundled worker → serialized adapter: automatic sign-in/recovery, account scope, masking and failures',
   { timeout: 30_000 },
   async () => {
     const base = await mkdtemp(join(tmpdir(), 'fidelity-portfolio-e2e-'));
@@ -55,7 +55,14 @@ test(
       | 'unknown-row' = 'normal';
     const calls: Array<{ operation: string; ids: string[] }> = [];
     const frames: unknown[] = [];
-    const storage: Record<string, unknown> = {};
+    const storage: Record<string, unknown> = { selectedTab: 999 };
+    const updates: unknown[] = [];
+    let connections = 0,
+      polls = 0;
+    let signingIn = false,
+      tabClosed = false;
+    let disconnect!: () => void;
+    let reconnect!: (alarm: { name: string }) => void;
     let messages!: (message: unknown) => void, start!: () => void;
     const port = {
       onMessage: {
@@ -63,7 +70,11 @@ test(
           messages = fn;
         },
       },
-      onDisconnect: { addListener: () => {} },
+      onDisconnect: {
+        addListener: (listener: typeof disconnect) => {
+          disconnect = listener;
+        },
+      },
       postMessage: (frame: unknown) => {
         frames.push(frame);
         native!.stdin.write(encodeMessage(frame));
@@ -191,8 +202,10 @@ test(
     const chrome = {
       runtime: {
         id: extensionId,
-        connectNative: () => port,
-        onMessage: { addListener: () => {} },
+        connectNative: () => {
+          connections++;
+          return port;
+        },
         onInstalled: {
           addListener: (fn: typeof start) => {
             start = fn;
@@ -210,21 +223,38 @@ test(
         },
       },
       tabs: {
-        get: async () => tab,
-        query: async () => [tab],
-        update: async () => {
-          throw new Error('Portfolio reads must not navigate');
+        get: async (id: number) => {
+          if (id === 999 || (tabClosed && id === 7)) throw new Error('Tab closed');
+          return { ...tab, id };
+        },
+        query: async () => [
+          { ...tab, id: 8, active: false, lastAccessed: 200 },
+          { ...tab, id: 9, active: false, lastAccessed: 100 },
+          ...(tabClosed ? [] : [{ ...tab, lastAccessed: 1 }]),
+        ],
+        update: async (_id: number, value: unknown) => {
+          updates.push(value);
+          return { ...tab };
         },
         create: async () => {
           throw new Error('Portfolio reads must not open tabs');
         },
       },
       windows: { update: async () => {} },
-      alarms: { create: async () => {}, onAlarm: { addListener: () => {} } },
+      alarms: {
+        create: async () => {},
+        onAlarm: {
+          addListener: (listener: typeof reconnect) => {
+            reconnect = listener;
+          },
+        },
+      },
       scripting: {
         executeScript: async (operation: any) => {
           assert.equal(operation.world, 'MAIN');
-          assert.equal(operation.target.tabId, 7);
+          assert.equal(operation.target.tabId, tabClosed ? 8 : 7);
+          if (signingIn)
+            tab.url = 'https://login.fidelity.com/ftgw/Fas/Fidelity/RtlCust/Login/Init';
           // Exercise Chrome's serialization boundary rather than calling the adapter
           // with its module closure. All provider data here is synthetic.
           const result = await runInNewContext(`(${operation.func.toString()})(...args)`, {
@@ -247,9 +277,19 @@ test(
       crypto: webcrypto,
       URL,
       Date,
-      setTimeout,
+      setTimeout: (callback: () => void) => {
+        assert.equal(signingIn, true);
+        if (++polls === 2) {
+          mode = 'normal';
+          signingIn = false;
+          tab.url = 'https://digital.fidelity.com/ftgw/digital/portfolio/summary';
+        }
+        return setImmediate(callback);
+      },
     });
+    assert.equal(connections, 1, 'Worker connects automatically before any install event.');
     start();
+    assert.equal(connections, 1, 'Install reuses the existing native connection.');
     const decoder = new MessageDecoder((message) => messages(message));
     const mcp = createServer(bridge);
     async function tool(name: string, args: Record<string, unknown> = {}) {
@@ -318,6 +358,23 @@ test(
       for (let n = 0; n < 150 && !bridge.connected; n++)
         await new Promise((r) => setTimeout(r, 20));
       assert.equal(bridge.connected, true);
+      mode = 'expired';
+      signingIn = true;
+      await bridge.connectFidelity(new AbortController().signal);
+      assert.equal(polls, 2, 'Readiness waits through same-tab login and completed sign-in.');
+      assert.equal(storage.selectedTab, 7, 'Stale selection is discarded and the active tab wins.');
+      assert.deepEqual(JSON.parse(JSON.stringify(updates)), [{ active: true }]);
+      assert.deepEqual(
+        JSON.parse(JSON.stringify(frames[0])),
+        {
+          type: 'response',
+          id: (frames[0] as { id: string }).id,
+          ok: true,
+          result: { connected: true },
+        },
+        'Readiness sends no financial data or credentials.',
+      );
+      const firstRead = calls.length;
       const listed = await tool('tools/list');
       assert.ok(listed.tools, JSON.stringify(listed));
       assert.deepEqual(
@@ -359,7 +416,7 @@ test(
         1,
       );
       assert.deepEqual(
-        calls.slice(0, 5).map((c) => c.ids.length),
+        calls.slice(firstRead, firstRead + 5).map((c) => c.ids.length),
         [2, 1, 1, 2, 1],
       );
       const before = calls.length;
@@ -405,6 +462,16 @@ test(
         (await tool('fidelity_list_accounts')).structuredContent.accounts[0].accountId,
         accountId,
       );
+      disconnect();
+      reconnect({ name: 'reconnect' });
+      assert.equal(connections, 2, 'Reconnect alarm restores the native port automatically.');
+      tabClosed = true;
+      assert.equal(
+        (await tool('fidelity_list_accounts')).structuredContent.accounts[0].accountId,
+        accountId,
+        'Closed remembered tab falls back to most recent Fidelity tab with stable references.',
+      );
+      assert.equal(updates.length, 1, 'Portfolio reads and recovery never navigate or focus tabs.');
       assert.doesNotMatch(
         JSON.stringify(frames),
         /TEST1234|NEXT1234|HIDE5678|EXTN6789|synthetic-csrf|synthetic-customer|picoString/,
@@ -420,6 +487,11 @@ test(
             runtime:
               'MCP handler, real native-host subprocess, compiled worker and serialized MAIN-world adapter; simulated Chrome and synthetic Fidelity',
             checks: [
+              'Automatic startup and native-port reconnection without manual controls.',
+              'Stale tab discarded; active Fidelity tab wins over more recent inactive tabs.',
+              'Same-tab login/2FA wait completes through the real native-host bridge.',
+              'Readiness returns only connected:true; no approval tab or financial data.',
+              'Closed selected tab falls back to the most recent Fidelity tab without navigation or reference changes.',
               'Exactly three read-only tools.',
               'All supported accounts independent of current UI account selection.',
               'One account filters provider requests and results.',
