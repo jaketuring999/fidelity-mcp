@@ -2,6 +2,10 @@
 
 Read Fidelity accounts, balances, positions, open tax lots, performance, and balance history from a local MCP client using your existing Chrome session. Fidelity MCP runs on your computer and supports a companion Chrome extension or Chrome remote debugging. This is an unofficial integration with six read-only tools.
 
+![Codex compares cash and specific tax lots for a $10,000 withdrawal](docs/assets/codex-withdrawal.gif)
+
+Real Codex interaction with six MCP calls, followed by Chrome connection setup. Portfolio figures are substituted for privacy; no trades or withdrawals are executed.
+
 List accounts first, then use the returned opaque `accountId` to read one account's balance or positions. Omit `accountId` to read all visible supported Fidelity brokerage accounts, including brokerage IRAs, regardless of the account highlighted in Chrome. Hidden accounts, external accounts, and other account types are excluded. Account numbers are masked. Orders and transfers are outside the app's scope.
 
 For tool development, start with the [offline Fidelity API reference](docs/fidelity/README.md): an endpoint catalog, synthetic examples, and reconstructed OpenAPI contracts for validated reads. Downloaded bundles and client GraphQL documents are local research evidence excluded from publication.
