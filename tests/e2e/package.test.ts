@@ -96,6 +96,7 @@ test(
             '.prettierignore',
             'AGENTS.md',
             'README.md',
+            'docs/assets/codex-withdrawal.gif',
             'package.json',
             'package-lock.json',
             'tsconfig.json',
