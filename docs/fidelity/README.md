@@ -27,6 +27,6 @@ When local evidence is unavailable or insufficient, inspect live Chrome to valid
 
 1. Inspect the catalog, shared context, adapter source and available local raw/GraphQL evidence.
 2. Reuse account selection, runtime bootstrap and gzip encoding. Keep full provider account numbers inside Chrome.
-3. Exercise the new read through the MCP/native-host/extension E2E path with synthetic data, including incomplete responses and failures.
+3. Exercise the new read through the MCP/browser E2E path with synthetic data, including incomplete responses and failures.
 4. Validate the read in live Chrome before claiming provider compatibility. Record schema coverage and limitations without customer data.
 5. Update the public contracts and E2E evidence together. Run `npm run check` and `npm test`; successful suites write repeatable reports to ignored `artifacts/`.

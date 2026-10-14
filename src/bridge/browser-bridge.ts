@@ -7,7 +7,7 @@ import { localPaths } from '../runtime/paths.js';
 import { FidelityError } from '../domain/errors.js';
 import {
   balanceResultSchema,
-  responseSchema,
+  failureCodeSchema,
   MAX_PORTFOLIO_BYTES,
   type ReadOptions,
 } from './protocol.js';
@@ -19,7 +19,7 @@ function isPortfolio(page: Page): boolean {
 }
 
 // Playwright owns a dedicated profile or attaches to user-approved everyday Chrome.
-// Only our fixed adapter is evaluated; no cookie export or extension/native host.
+// Only our fixed adapter is evaluated; cookies stay in Chrome.
 export class BrowserBridge extends PortfolioReader {
   private context: BrowserContext | undefined;
   private selected: Page | undefined;
@@ -150,12 +150,8 @@ export class BrowserBridge extends PortfolioReader {
       .strict()
       .safeParse(raw);
     if (failure.success) {
-      const parsed = responseSchema.safeParse({
-        type: 'response',
-        id: '00000000-0000-4000-8000-000000000000',
-        ...failure.data,
-      });
-      if (parsed.success && !parsed.data.ok) throw portfolioFailure(parsed.data.code);
+      const parsed = failureCodeSchema.safeParse(failure.data.code);
+      if (parsed.success) throw portfolioFailure(parsed.data);
     }
     const success = z
       .object({ ok: z.literal(true) })

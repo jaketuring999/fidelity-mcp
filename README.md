@@ -10,23 +10,14 @@ Real Codex interaction with portfolio figures substituted for privacy. No trades
 
 ## Quick start
 
-You need **Node.js 24+**, **Chrome**, and a **local MCP client** that supports Streamable HTTP and OAuth. Supported platforms: macOS and Linux. Cloud clients cannot reach the local server.
-
-Choose a connection method:
-
-| Method              | Requirements                                                                 | Setup                                                     |
-| ------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Chrome debugging    | Chrome 144+; enable remote debugging and approve Chrome's connection prompt. | Steps below                                               |
-| Companion extension | Chrome 120+; load the unpacked extension and register its native host.       | [Extension setup](docs/setup.md#setup-with-the-extension) |
-
-For Chrome debugging:
+You need **Node.js 24+**, **Chrome 144+**, and a **local MCP client** that supports Streamable HTTP and OAuth. Supported platforms: macOS and Linux. Cloud clients cannot reach the local server.
 
 1. Open `chrome://inspect/#remote-debugging` in Chrome and enable **Allow remote debugging for this browser instance**.
 2. From the repository root, run:
 
    ```sh
    npm ci
-   MCP_PORT=3444 npm run start:debugging
+   MCP_PORT=3444 npm start
    ```
 
 3. Click **Allow** in Chrome's connection prompt and leave the server running.
@@ -36,7 +27,7 @@ In the Codex desktop app, use **Settings → Plugins → MCPs → Add → Add MC
 
 Chrome debugging grants browser-wide control to the local app. Connecting clients automatically receive portfolio read access after a working Fidelity session is confirmed. See [security and authorization](docs/security.md) for details.
 
-For client requirements, extension installation, bridge switching, and connection fixes, see [setup and troubleshooting](docs/setup.md).
+For client requirements and connection fixes, see [setup and troubleshooting](docs/setup.md).
 
 ## Available tools
 
@@ -61,7 +52,7 @@ npx playwright install --with-deps chromium
 npm test
 ```
 
-E2E tests use synthetic Fidelity data and produce repeatable reports in `artifacts/`. The package is distributed from source and is not published to npm or the Chrome Web Store.
+E2E tests use synthetic Fidelity data and produce repeatable reports in `artifacts/`. The package is distributed from source and is not published to npm.
 
 - [Development and verification](docs/development.md)
 - [Architecture](docs/architecture.md)

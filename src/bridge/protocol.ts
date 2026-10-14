@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
-export const MAX_MESSAGE_BYTES = 256 * 1024;
-export const MAX_PORTFOLIO_BYTES = MAX_MESSAGE_BYTES - 1024;
+export const MAX_PORTFOLIO_BYTES = 255 * 1024;
 
 export const accountIdSchema = z.string().regex(/^acct_[a-f0-9]{32}$/);
 export const historyRangeSchema = z.enum(['1M', 'YTD', '1Y', '3Y']);
@@ -12,67 +11,7 @@ export const symbolSchema = z
   .max(100)
   .regex(/^[A-Za-z0-9 ./*^_$+-]+$/);
 export type ReadOptions = { symbol?: string; range?: z.infer<typeof historyRangeSchema> };
-export const commandSchema = z.discriminatedUnion('operation', [
-  z
-    .object({
-      type: z.literal('command'),
-      id: z.string().uuid(),
-      operation: z.literal('read_tax_lots'),
-      accountId: accountIdSchema,
-      symbol: symbolSchema,
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('command'),
-      id: z.string().uuid(),
-      operation: z.literal('read_performance'),
-      accountId: accountIdSchema.optional(),
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('command'),
-      id: z.string().uuid(),
-      operation: z.literal('read_balance_history'),
-      accountId: accountIdSchema.optional(),
-      range: historyRangeSchema,
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('command'),
-      id: z.string().uuid(),
-      operation: z.literal('read_balance'),
-      accountId: accountIdSchema.optional(),
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('command'),
-      id: z.string().uuid(),
-      operation: z.literal('read_positions'),
-      accountId: accountIdSchema.optional(),
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('command'),
-      id: z.string().uuid(),
-      operation: z.literal('list_accounts'),
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('command'),
-      id: z.string().uuid(),
-      operation: z.literal('connect_fidelity'),
-      expiresAt: z.number().int().positive(),
-    })
-    .strict(),
-]);
-export type BridgeCommand = z.infer<typeof commandSchema>;
-const failureCodeSchema = z.enum([
+export const failureCodeSchema = z.enum([
   'AUTHENTICATION_REQUIRED',
   'API_CONTEXT_UNAVAILABLE',
   'API_RESPONSE_CHANGED',
@@ -83,24 +22,6 @@ const failureCodeSchema = z.enum([
   'RESPONSE_TOO_LARGE',
 ]);
 export type FailureCode = z.infer<typeof failureCodeSchema>;
-export const responseSchema = z.discriminatedUnion('ok', [
-  z
-    .object({
-      type: z.literal('response'),
-      id: z.string().uuid(),
-      ok: z.literal(true),
-      result: z.unknown(),
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('response'),
-      id: z.string().uuid(),
-      ok: z.literal(false),
-      code: failureCodeSchema,
-    })
-    .strict(),
-]);
 const moneySchema = z.string().regex(/^-?\d{1,15}\.\d{2}$/);
 export const balanceResultSchema = z
   .object({

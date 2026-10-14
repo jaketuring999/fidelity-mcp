@@ -1,6 +1,6 @@
 # Security and authorization
 
-Fidelity MCP trusts the current OS user and local MCP clients. When the authenticated extension confirms a working Fidelity session, the server automatically grants a connecting client portfolio read access. There is no per-client approval UI or per-call confirmation. One server per OS user shares that user's selected Fidelity session with authorized clients.
+Fidelity MCP trusts the current OS user and local MCP clients. When the connected browser confirms a working Fidelity session, the server automatically grants a connecting client portfolio read access. There is no per-client approval UI or per-call confirmation. One server per OS user shares that user's selected Fidelity session with authorized clients.
 
 The server listens only on `127.0.0.1`, rejects foreign Host/Origin values, and disables cross-origin browser access. Transport is stateless Streamable HTTP. OAuth records persist separately from MCP transport state.
 
@@ -18,22 +18,19 @@ access, including other signed-in sites, although application code evaluates
 only the bundled adapter in Fidelity portfolio pages. It does not export
 cookies, expose CDP through MCP, or close user tabs on shutdown. Disabling
 remote debugging in Chrome removes the enabled debugging listener. This mode
-requires explicit user setup and Chrome 144+; it is not an extension-equivalent
-host permission boundary.
+requires explicit user setup and Chrome 144+.
 
 Experimental browser mode uses a dedicated persistent Chrome profile controlled
-by Playwright through a private pipe. Browser automation has broader capabilities
-than the extension's scoped manifest; our MCP tools expose only the fixed reads
+by Playwright through a private pipe. Our MCP tools expose only the fixed reads
 and do not expose that control interface. Fidelity cookies and credentials stay
 in Chrome, and the profile directory is restricted to the current OS user.
 The same local-client authorization policy and portfolio scope apply. No debug
 TCP listener or cookie export is enabled. Do not commit or publish this profile.
 
 - Sign-in, saved-password autofill, cookies, CSRF headers, full account numbers, and Fidelity request payloads stay inside Chrome.
-- The extension has host access to `https://digital.fidelity.com/*` and exposes fixed readiness, account listing, balance and positions operations, without an arbitrary URL or script gateway.
-- Native messaging and the authenticated private socket carry normalized account metadata, balances, positions and connection proof. Account names and values still constitute sensitive financial data.
+- The browser adapter returns normalized account metadata and portfolio values. These remain sensitive financial data.
 - Public HTTP requests cannot create owner sessions or submit consent directly. Owner cookies remain inside the server process.
-- Authorization records, signing keys, the server secret, and native-bridge state live under `~/.fidelity-mcp/`, with private runtime directory and credential-file permissions.
+- Authorization records, signing keys, the server secret, and browser-profile state live under `~/.fidelity-mcp/`, with private runtime directory and credential-file permissions.
 
 To revoke every local client's access and refresh grants:
 
@@ -45,7 +42,7 @@ Clients must reconnect afterward. Fidelity session expiry separately requires si
 
 Do not commit runtime state, captured provider responses, credentials, or financial data. Generated verification reports and local editor/client configuration are ignored by Git and excluded from the package.
 
-The portfolio scope is `fidelity:portfolio:read`. Existing balance-only tokens do not authorize the new tool set; reconnect local clients after upgrading. The extension retains a browser-session salt for opaque account references. Full account numbers and raw provider context still remain in Chrome. All-account reads cover supported visible brokerage accounts regardless of the currently highlighted account.
+The portfolio scope is `fidelity:portfolio:read`. Existing balance-only tokens do not authorize the new tool set; reconnect local clients after upgrading. The server retains a process-lifetime salt for opaque account references. Full account numbers and raw provider context still remain in Chrome. All-account reads cover supported visible brokerage accounts regardless of the currently highlighted account.
 
 ## Public repository hygiene
 

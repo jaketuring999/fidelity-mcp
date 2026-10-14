@@ -15,7 +15,7 @@ All-account reads cover visible supported Fidelity brokerage accounts, including
 | `fidelity_get_performance`     | `{}` or `{ "accountId": "acct_…" }`           | Per-account cumulative time-weighted pretax net returns for 1M, YTD, 1Y and 3Y.            |
 | `fidelity_get_balance_history` | `{ "range": "1M", "accountId": "acct_…" }`    | Dated account values; both fields optional, default range 1Y. Supports 1M, YTD, 1Y and 3Y. |
 
-Use the complete `accountId` returned by the accounts tool; the ellipsis above is illustrative. In extension mode, account references persist within a Chrome session, including extension worker restarts and tab reloads. Restarting Chrome changes them. In either browser mode, restarting the server changes them. List accounts again after a restart. Unknown references return `ACCOUNT_NOT_FOUND`, and empty strings or raw account numbers are invalid inputs. Last-four suffixes can collide and are not lookup keys.
+Use the complete `accountId` returned by the accounts tool; the ellipsis above is illustrative. Restarting the server changes account references. List accounts again after a restart. Unknown references return `ACCOUNT_NOT_FOUND`, and empty strings or raw account numbers are invalid inputs. Last-four suffixes can collide and are not lookup keys.
 
 Tax lots require a symbol from the selected account's positions. The tool reads every page, normalizes display currencies and percentages to decimal strings, preserves wash-sale flags and distinguishes ineligible holdings from available lots. Dates use `YYYY-MM-DD`; unavailable fields remain omitted. Basis is adjusted as reported by Fidelity. `RESPONSE_TOO_LARGE` explicitly rejects results exceeding the bounded bridge size without returning a partial set or disconnecting it.
 
@@ -29,7 +29,7 @@ Results include `source: fidelity_internal_api`, `scope: all_visible_brokerage_a
 - `settledCash`: included when Fidelity provides it.
 - `cashAvailableToWithdraw`: cash-only withdrawal availability, excluding margin borrowing.
 
-Totals use integer cents. Missing values or incomplete responses return errors instead of partial totals or invented zeroes. Retrieval time is not a market-data timestamp; Fidelity data may lag. The extension calls Fidelity's internal balances API, whose routes and response shapes can change.
+Totals use integer cents. Missing values or incomplete responses return errors instead of partial totals or invented zeroes. Retrieval time is not a market-data timestamp; Fidelity data may lag. The browser adapter calls Fidelity's internal balances API, whose routes and response shapes can change.
 
 ## Positions results
 
