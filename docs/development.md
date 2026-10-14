@@ -14,7 +14,7 @@ npm test
 For current remote-debugging development, run `MCP_PORT=3444 npm run dev:debugging`
 after an initial build. Use `npm run start:debugging` to rebuild and run the compiled
 server, or `npm run start:extension` to select the extension. Stop the current server
-before switching. See the README for the Chrome setting and approval prompt.
+before switching. See [setup](setup.md#chrome-remote-debugging-setup) for the Chrome setting and approval prompt.
 
 `check` type-checks the server and extension. `test` builds the app and runs only E2E tests. `npm run dev` runs the server source with tsx; build and load the extension separately.
 
