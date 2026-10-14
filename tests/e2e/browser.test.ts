@@ -197,7 +197,7 @@ for (const attach of [false, true])
           await route.fulfill({ contentType: 'application/json', body: JSON.stringify(payload) });
         });
         // Exercise Cursor's hosted callback through the actual browser bridge,
-        // including CDP attachment, rather than extension-only readiness.
+        // including CDP attachment.
         http = await startHttpServer(mcp, {
           base,
           port: 0,
@@ -437,7 +437,7 @@ for (const attach of [false, true])
               generatedAt: new Date().toISOString(),
               repeat: 'npm test',
               adapterHash,
-              runtime: `real headless Chromium; ${attach ? 'CDP attach/detach; existing browser survives' : 'owned browser'}; MCP handler; bundled adapter; intercepted synthetic Fidelity HTTP; no extension/native host`,
+              runtime: `real headless Chromium; ${attach ? 'CDP attach/detach; existing browser survives' : 'owned browser'}; MCP handler; bundled adapter; intercepted synthetic Fidelity HTTP`,
               liveFidelityValidated: false,
               checks: [
                 'Cursor hosted OAuth callback through browser readiness, PKCE token exchange and authenticated HTTP tools/list',

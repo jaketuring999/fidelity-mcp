@@ -22,10 +22,7 @@ import {
 } from '@modelcontextprotocol/client';
 
 const serverUrl = `http://127.0.0.1:${process.env.MCP_PORT ?? '3443'}/mcp`;
-const bridgeMode =
-  process.env.FIDELITY_BRIDGE === 'chrome-debugging'
-    ? 'browser-attach'
-    : process.env.FIDELITY_BRIDGE;
+const bridgeMode = process.env.FIDELITY_BRIDGE === 'browser' ? 'browser' : 'browser-attach';
 let clientInfo: StoredOAuthClientInformation | undefined;
 let tokens: StoredOAuthTokens | undefined;
 let discovery: OAuthDiscoveryState | undefined;
@@ -84,9 +81,7 @@ const provider: OAuthClientProvider = {
     discovery = value;
   },
   redirectToAuthorization: (url) => {
-    console.log(
-      `Checking automatic local OAuth callback with ${bridgeMode?.startsWith('browser') ? 'Chrome browser bridge' : 'the real Chrome extension'}.`,
-    );
+    console.log(`Checking automatic local OAuth callback with Chrome browser bridge.`);
     void (async () => {
       let next = url;
       for (let redirects = 0; redirects < 5; redirects++) {
@@ -174,9 +169,7 @@ try {
       'fidelity_get_balance_history',
     ])
   )
-    throw new Error(
-      'Unexpected tool set. Rebuild and restart the browser bridge or extension and server.',
-    );
+    throw new Error('Unexpected tool set. Rebuild and restart the browser bridge and server.');
   const accountResult = await client.callTool({ name: 'fidelity_list_accounts', arguments: {} });
   const listed = accountsResultSchema.safeParse(accountResult.structuredContent);
   if (accountResult.isError || !listed.success || !listed.data.accounts.length)
@@ -286,24 +279,18 @@ try {
     throw new Error('Revoked test access was still accepted.');
   await mkdir('artifacts', { recursive: true });
   await writeFile(
-    bridgeMode?.startsWith('browser')
-      ? bridgeMode === 'browser-attach'
-        ? 'artifacts/browser-attach-live.json'
-        : 'artifacts/browser-live.json'
-      : 'artifacts/oauth-live.json',
+    bridgeMode === 'browser-attach'
+      ? 'artifacts/browser-attach-live.json'
+      : 'artifacts/browser-live.json',
     JSON.stringify(
       {
         passed: true,
         generatedAt: new Date().toISOString(),
-        repeat: bridgeMode?.startsWith('browser')
-          ? `FIDELITY_BRIDGE=${process.env.FIDELITY_BRIDGE} MCP_PORT=${process.env.MCP_PORT ?? '3443'} npm run check:live`
-          : 'npm run check:live',
+        repeat: `FIDELITY_BRIDGE=${bridgeMode} MCP_PORT=${process.env.MCP_PORT ?? '3443'} npm run check:live`,
         endpoint: serverUrl,
         client: 'official MCP SDK v2',
         transport: 'loopback HTTP, stateless 2026-07-28',
-        connection: bridgeMode?.startsWith('browser')
-          ? `${bridgeMode === 'browser-attach' ? 'everyday Chrome attach' : 'dedicated Chrome'} browser bridge; no extension/native host; automatic Fidelity readiness`
-          : 'real Chrome extension; automatic Fidelity readiness',
+        connection: `${bridgeMode === 'browser-attach' ? 'everyday Chrome attach' : 'dedicated Chrome'} browser bridge; automatic Fidelity readiness`,
         callback: 'local HTTP client followed OAuth redirects',
         tools: toolNames,
         accounts: 'real Fidelity context; identifiers omitted',

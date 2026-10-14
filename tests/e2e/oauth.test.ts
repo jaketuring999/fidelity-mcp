@@ -4,14 +4,12 @@ import { mkdtemp, mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { request } from 'node:http';
-import { spawn } from 'node:child_process';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { startHttpServer } from '../../src/server/http.js';
-import { createServer } from '../../src/server/mcp.js';
-import { ExtensionBridge } from '../../src/bridge/extension-bridge.js';
-import { writeRegistration } from '../../src/runtime/setup.js';
-import { encodeMessage, MessageDecoder } from '../../src/bridge/framing.js';
-import { revokeLocalAccess } from '../../src/server/auth.js';
+import { createHash, randomBytes } from 'node:crypto';
+import { startHttpServer } from '../../dist/server/http.js';
+import { createServer } from '../../dist/server/mcp.js';
+import { BrowserBridge } from '../../dist/bridge/browser-bridge.js';
+import { chromium } from 'playwright';
+import { revokeLocalAccess } from '../../dist/server/auth.js';
 import {
   auth,
   Client,
@@ -83,75 +81,87 @@ async function eventually<T>(read: () => Promise<T | undefined>): Promise<T> {
 }
 
 test(
-  'OAuth over loopback HTTP → native host → Fidelity ready → automatic callback → MCP balance, refresh, restart and revocation',
-  { timeout: 30_000 },
+  'OAuth over loopback HTTP → CDP browser → Fidelity ready → automatic callback → MCP balance, refresh, restart and revocation',
+  { timeout: 60_000 },
   async () => {
     const base = await mkdtemp(join(tmpdir(), 'fidelity-oauth-e2e-'));
     const evidence: string[] = [];
-    const bridge = new ExtensionBridge(base, () => {});
-    const id = 'a'.repeat(32);
-    await writeRegistration({
-      extensionId: id,
-      base,
-      manifestDirectory: join(base, 'manifests'),
-      entrypoint: '/synthetic',
-      node: process.execPath,
+    const profile = join(base, 'synthetic-chrome');
+    const owner = await chromium.launchPersistentContext(profile, {
+      headless: true,
+      channel: 'chromium',
+      args: ['--remote-debugging-port=0'],
     });
-    await bridge.start();
-    const nativeCode = `import {runNativeHost} from './dist/bridge/native-host.js'; await runNativeHost(${JSON.stringify(`chrome-extension://${id}/`)},${JSON.stringify(base)});`;
-    const native = spawn(process.execPath, ['--input-type=module', '-e', nativeCode], {
-      stdio: ['pipe', 'pipe', 'pipe'],
+    const { readFile } = await import('node:fs/promises');
+    const [port, path] = (await readFile(join(profile, 'DevToolsActivePort'), 'utf8'))
+      .trim()
+      .split('\n');
+    const bridge = new BrowserBridge(base, {
+      attach: true,
+      cdpEndpoint: `ws://127.0.0.1:${port}${path}`,
     });
-    let nativeLog = '',
-      balanceReads = 0;
-    const connections: Array<{ id: string }> = [];
+    let balanceReads = 0;
+    let ready = false;
     let mode: 'balance' | 'expired' = 'balance';
-    native.stderr.on('data', (chunk) => {
-      nativeLog += String(chunk);
-    });
-    const decoder = new MessageDecoder((value) => {
-      const command = value as { type: string; operation: string; id: string };
-      if (command.type !== 'command') return;
-      if (command.operation === 'connect_fidelity') {
-        connections.push(command);
-        return;
-      }
-      if (command.operation === 'read_balance') {
-        balanceReads++;
-        native.stdin.write(
-          encodeMessage(
-            mode === 'expired'
-              ? { type: 'response', id: command.id, ok: false, code: 'AUTHENTICATION_REQUIRED' }
-              : {
-                  type: 'response',
-                  id: command.id,
-                  ok: true,
-                  result: {
-                    retrievedAt: new Date().toISOString(),
-                    accounts: [
-                      {
-                        accountId: 'acct_' + 'a'.repeat(32),
-                        last4: '1234',
-                        name: 'Synthetic account',
-                        totalAccountValue: '42.00',
-                      },
-                    ],
-                  },
-                },
-          ),
-        );
-      }
-    });
-    native.stdout.on('data', (chunk) => decoder.push(chunk));
+    const connections: Array<{ controller: AbortController }> = [];
     let endpoint: Awaited<ReturnType<typeof startHttpServer>> | undefined;
+    const connectFidelity = (signal: AbortSignal) => {
+      ready = false;
+      const controller = new AbortController();
+      connections.push({ controller });
+      return bridge.connectFidelity(AbortSignal.any([signal, controller.signal]));
+    };
     try {
-      await eventually(async () => (bridge.connected ? true : undefined));
-      assert.equal(nativeLog, '');
-      evidence.push('Real native-host subprocess connected through authenticated private socket.');
+      await bridge.start();
+      const context = (bridge as unknown as { context: import('playwright').BrowserContext })
+        .context;
+      await context.exposeFunction('syntheticPerson', () => {
+        if (!ready) throw new Error('Synthetic sign-in is pending.');
+        return {
+          person: {
+            assets: [
+              {
+                acctNum: 'TEST1234',
+                acctType: 'Brokerage',
+                preferenceDetail: { name: 'Synthetic account' },
+              },
+            ],
+          },
+        };
+      });
+      await context.route('**/*', async (route) => {
+        const request = route.request();
+        const url = new URL(request.url());
+        if (url.origin !== 'https://digital.fidelity.com') {
+          await route.abort();
+        } else if (request.isNavigationRequest()) {
+          await route.fulfill({
+            contentType: 'text/html',
+            body: '<script>window.PortSumContainer={PicoService:{getPersonContext:()=>window.syntheticPerson()}};</script>',
+          });
+        } else if (mode === 'expired') {
+          await route.fulfill({ status: 401, body: '' });
+        } else if (url.pathname.endsWith('/balwebex/')) {
+          await route.fulfill({ body: 'window.balExpConfig={"ctoken":"synthetic-csrf"};' });
+        } else if (url.pathname.endsWith('/balances')) {
+          balanceReads++;
+          await route.fulfill({
+            contentType: 'application/json',
+            body: JSON.stringify([
+              { account: { acctNum: 'TEST1234' }, balance: { totalAcctVal: '42.00' } },
+            ]),
+          });
+        } else {
+          await route.abort();
+        }
+      });
+      evidence.push(
+        'Real Chromium connected over CDP; bundled adapter reads intercepted synthetic Fidelity HTTP.',
+      );
       endpoint = await startHttpServer(createServer(bridge), {
         base,
         port: 0,
-        connectFidelity: (signal) => bridge.connectFidelity(signal),
+        connectFidelity,
       });
       const origin = new URL(endpoint.url).origin;
       const get = (path: string) => send(new URL(path, origin).href);
@@ -265,21 +275,15 @@ test(
         return { verifier, response, connection };
       }
       async function finish(
-        flow: { response: ReturnType<typeof send>; connection: { id: string } },
-        ready: boolean,
+        flow: { response: ReturnType<typeof send>; connection: { controller: AbortController } },
+        authenticated: boolean,
       ) {
-        native.stdin.write(
-          encodeMessage(
-            ready
-              ? { type: 'response', id: flow.connection.id, ok: true, result: { connected: true } }
-              : {
-                  type: 'response',
-                  id: flow.connection.id,
-                  ok: false,
-                  code: 'AUTHENTICATION_REQUIRED',
-                },
-          ),
-        );
+        if (authenticated) {
+          // Release synthetic sign-in; the real adapter must establish readiness.
+          ready = true;
+        } else {
+          flow.connection.controller.abort();
+        }
         const response = await flow.response;
         assert.equal(response.status, 302, response.text);
         assert.equal(response.text, '');
@@ -325,7 +329,7 @@ test(
       assert.equal(cursorTokens.status, 200, cursorTokens.text);
       assert.equal((await call('tools/list', cursorTokens.json.access_token)).status, 200);
       evidence.push(
-        'Cursor hosted callback completes through native extension readiness; lookalike and modified remote callbacks are rejected.',
+        'Cursor hosted callback completes through browser Fidelity readiness; lookalike and modified remote callbacks are rejected.',
       );
       const flow = await begin();
       const callback = await finish(flow, true);
@@ -376,7 +380,7 @@ test(
       );
       mode = 'balance';
       evidence.push(
-        'Native Fidelity readiness enables a real modern MCP balance call without initialize or session ID; Fidelity expiry returns an explicit tool error.',
+        'Browser Fidelity readiness enables a real modern MCP balance call without initialize or session ID; Fidelity expiry returns an explicit tool error.',
       );
       for (const method of ['GET', 'DELETE'])
         assert.equal(
@@ -418,7 +422,7 @@ test(
       endpoint = await startHttpServer(createServer(bridge), {
         base,
         port,
-        connectFidelity: (signal) => bridge.connectFidelity(signal),
+        connectFidelity,
       });
       assert.equal((await call('tools/list', tokens.access_token)).status, 200);
       const oldRefresh = tokens.refresh_token;
@@ -620,20 +624,6 @@ test(
         400,
       );
       evidence.push('revoke-access invalidates access and refresh grants.');
-      native.stdin.write(
-        encodeMessage({
-          type: 'response',
-          id: randomUUID(),
-          ok: true,
-          result: {},
-          unexpected: true,
-        }),
-      );
-      await eventually(async () => (!bridge.connected ? true : undefined));
-      await eventually(async () => (bridge.connected ? true : undefined));
-      evidence.push(
-        'Malformed extension responses are rejected at the bridge; the native relay reconnects automatically.',
-      );
       await mkdir('artifacts', { recursive: true });
       await writeFile(
         'artifacts/oauth-e2e.json',
@@ -645,7 +635,7 @@ test(
             environment: { node: process.version, platform: process.platform },
             fidelityData: 'synthetic',
             connection:
-              'simulated Fidelity readiness through real native-host subprocess; automatic OAuth callback',
+              'real Chromium CDP connection and bundled adapter; intercepted synthetic Fidelity HTTP; automatic OAuth callback',
             transport: 'loopback HTTP + MCP 2026-07-28',
             checks: evidence,
           },
@@ -655,8 +645,8 @@ test(
       );
     } finally {
       await endpoint?.close();
-      native.kill();
       await bridge.close();
+      await owner.close();
       await rm(base, { recursive: true, force: true });
     }
   },

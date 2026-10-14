@@ -12,42 +12,48 @@ test('compiled CLI explains how to enable unavailable Chrome remote debugging', 
   const home = await mkdtemp(join(tmpdir(), 'fidelity-debugging-startup-'));
   try {
     // No DevToolsActivePort in this isolated home: never touch everyday Chrome.
-    const result = await run(
-      process.execPath,
-      [resolve('dist/index.js'), 'serve', '--bridge', 'chrome-debugging'],
-      {
-        env: {
-          ...process.env,
-          HOME: home,
-          XDG_CONFIG_HOME: join(home, '.config'),
-          FIDELITY_BRIDGE: 'extension',
-          MCP_PORT: '3444',
+    for (const selection of [[], ['--bridge', 'chrome-debugging']]) {
+      const result = await run(
+        process.execPath,
+        [resolve('dist/index.js'), 'serve', ...selection],
+        {
+          env: {
+            ...process.env,
+            HOME: home,
+            XDG_CONFIG_HOME: join(home, '.config'),
+            FIDELITY_BRIDGE: undefined,
+            MCP_PORT: '3444',
+          },
+          timeout: 15_000,
         },
-        timeout: 15_000,
-      },
-    ).then(
-      () => assert.fail('Startup must fail when Chrome debugging is unavailable.'),
-      (error: Error & { code?: number; stderr?: string; stdout?: string; killed?: boolean }) => {
-        assert.equal(error.killed, false, 'CLI must exit rather than hang.');
-        assert.equal(error.code, 1);
-        return { stderr: error.stderr ?? '', stdout: error.stdout ?? '' };
-      },
-    );
-    for (const instruction of [
-      'Could not connect to Chrome remote debugging',
-      'Google Chrome 144 or newer',
-      'chrome://inspect/#remote-debugging',
-      'Allow remote debugging for this browser instance',
-      'Server running at: 127.0.0.1:',
-      'Rerun your server command with --bridge chrome-debugging',
-      'click "Allow"',
-      'fully quit Chrome',
-      '--remote-debugging-port',
-    ]) {
-      assert.ok(result.stderr.includes(instruction), `Missing setup instruction: ${instruction}`);
+      ).then(
+        () => assert.fail('Startup must fail when Chrome debugging is unavailable.'),
+        (error: Error & { code?: number; stderr?: string; stdout?: string; killed?: boolean }) => {
+          assert.equal(error.killed, false, 'CLI must exit rather than hang.');
+          assert.equal(error.code, 1);
+          return { stderr: error.stderr ?? '', stdout: error.stdout ?? '' };
+        },
+      );
+      for (const instruction of [
+        'Could not connect to Chrome remote debugging',
+        'Google Chrome 144 or newer',
+        'chrome://inspect/#remote-debugging',
+        'Allow remote debugging for this browser instance',
+        'Server running at: 127.0.0.1:',
+        'Rerun your server command with --bridge chrome-debugging',
+        'click "Allow"',
+        'fully quit Chrome',
+        '--remote-debugging-port',
+      ]) {
+        assert.ok(result.stderr.includes(instruction), `Missing setup instruction: ${instruction}`);
+      }
+      assert.equal(result.stdout.includes('Fidelity MCP listening:'), false);
+      assert.equal(
+        result.stderr.includes(home),
+        false,
+        'Provider diagnostics must remain private.',
+      );
     }
-    assert.equal(result.stdout.includes('Fidelity MCP listening:'), false);
-    assert.equal(result.stderr.includes(home), false, 'Provider diagnostics must remain private.');
     await mkdir('artifacts', { recursive: true });
     await writeFile(
       'artifacts/browser-startup-e2e.json',
@@ -57,7 +63,7 @@ test('compiled CLI explains how to enable unavailable Chrome remote debugging', 
           generatedAt: new Date().toISOString(),
           repeat: 'npm run build && npx tsx --test tests/e2e/browser-startup.test.ts',
           scenario:
-            'Compiled CLI with --bridge chrome-debugging and no Chrome debugging endpoint in an isolated home.',
+            'Compiled CLI with default and explicit Chrome debugging selection; no endpoint in an isolated home.',
           checks: [
             'Exits with code 1 without starting the MCP listener or hanging.',
             'Explains the Chrome setting, endpoint readiness, restart command and Allow prompt.',
@@ -80,14 +86,14 @@ test('compiled CLI validates configuration before creating a browser or runtime 
     {
       name: 'unknown CLI bridge',
       args: ['--bridge', 'typo'],
-      bridge: 'extension',
+      bridge: 'chrome-debugging',
       port: '3443',
       expected: 'Invalid bridge selection from CLI',
     },
     {
       name: 'empty CLI bridge',
       args: ['--bridge', ''],
-      bridge: 'extension',
+      bridge: 'chrome-debugging',
       port: '3443',
       expected: 'Invalid bridge selection from CLI',
     },
@@ -107,12 +113,12 @@ test('compiled CLI validates configuration before creating a browser or runtime 
     },
     {
       name: 'CLI overrides invalid environment',
-      args: ['--bridge', 'extension'],
+      args: ['--bridge', 'chrome-debugging'],
       bridge: 'typo',
       port: '0',
       expected: 'MCP_PORT must be an integer',
     },
-    ...['extension', 'chrome-debugging', 'browser-attach', 'browser'].map((bridge) => ({
+    ...['chrome-debugging', 'browser-attach', 'browser'].map((bridge) => ({
       name: `explicit ${bridge}`,
       args: [],
       bridge,

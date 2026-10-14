@@ -5,9 +5,6 @@ type ErrorCode =
   | 'BROWSER_LAUNCH_FAILED'
   | 'BROWSER_DISCONNECTED'
   | FailureCode
-  | 'EXTENSION_DISCONNECTED'
-  | 'BRIDGE_IN_USE'
-  | 'BRIDGE_TIMEOUT'
   | 'INVALID_BRIDGE_RESPONSE';
 
 export class FidelityError extends Error {

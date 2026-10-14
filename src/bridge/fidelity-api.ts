@@ -1,11 +1,11 @@
-import type { FidelityPagePolicy } from '../../src/domain/fidelity-page.js';
+import type { FidelityPagePolicy } from '../domain/fidelity-page.js';
 import type {
   AccountInfo,
   AccountsSnapshot,
   AccountBalance,
   FailureCode,
   ReadOptions,
-} from '../../src/bridge/protocol.js';
+} from './protocol.js';
 
 type JsonObject = Record<string, any>;
 export type ReadOperation =

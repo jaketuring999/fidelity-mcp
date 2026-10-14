@@ -83,10 +83,10 @@ function makeAuth(origin: string, secret: string, database: DatabaseSync) {
       }) as unknown as BetterAuthPlugin,
       cimd({ fetchClientMetadataResource, metadataProfile: 'mcp-2026-07-28' }),
       {
-        id: 'local-extension-owner',
+        id: 'local-browser-owner',
         endpoints: {
-          // This endpoint is called only through the in-process API AFTER native
-          // connection. It is never exposed by the HTTP router.
+          // This endpoint is called only through the in-process API AFTER Fidelity
+          // readiness. It is never exposed by the HTTP router.
           localOwnerSession: createAuthEndpoint(
             '/local-owner-session',
             { method: 'POST', body: z.object({ refreshGrant: z.boolean() }) },
@@ -102,7 +102,7 @@ function makeAuth(origin: string, secret: string, database: DatabaseSync) {
                     email: 'owner@fidelity-mcp.invalid',
                     emailVerified: true,
                   },
-                  { method: 'local-extension' },
+                  { method: 'local-browser' },
                 ));
               const session = await ctx.context.internalAdapter.createSession(
                 user.id,
@@ -123,7 +123,7 @@ type Auth = ReturnType<typeof makeAuth>;
 
 // Better Auth owns OAuth discovery, client registration/CIMD, PKCE, durable
 // grants, signing and refresh. This adapter completes a connection after verifying the
-// authenticated Chrome extension. Owner session cookies stay inside this process.
+// connected Chrome session. Owner session cookies stay inside this process.
 export class LocalOAuth {
   readonly resource: string;
   private auth: Auth | undefined;
@@ -248,7 +248,7 @@ export class LocalOAuth {
         await this.connectFidelity(controller.signal);
         controller.signal.throwIfAborted();
         // Fidelity credentials stay in Chrome. This is a separate local MCP
-        // grant, automatically issued once the native extension proves readiness.
+        // grant, automatically issued once the browser confirms Fidelity readiness.
         const refreshGrant = (url.searchParams.get('scope') ?? '')
           .split(' ')
           .includes('offline_access');

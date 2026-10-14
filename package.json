@@ -2,14 +2,13 @@
   "name": "fidelity-mcp",
   "version": "0.2.0",
   "private": true,
-  "description": "Local Fidelity MCP server with a companion Chrome extension",
+  "description": "Local Fidelity MCP server using Chrome remote debugging",
   "type": "module",
   "bin": {
     "fidelity-mcp": "dist/index.js"
   },
   "files": [
     "dist/**/*.js",
-    "dist/extension/manifest.json",
     "docs/architecture.md",
     "docs/setup.md",
     "docs/tools.md",
@@ -28,9 +27,8 @@
     "build": "node scripts/build.mjs",
     "start": "npm run build && node dist/index.js",
     "dev": "tsx src/index.ts",
-    "check": "tsc -p tsconfig.json --noEmit && tsc -p extension/tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && tsx --test tests/e2e/*.test.ts",
-    "setup": "npm run build && node dist/index.js setup",
     "prepack": "npm run check && npm run build",
     "check:live": "tsx scripts/check-live.ts",
     "lint": "eslint . --max-warnings 0",
@@ -38,7 +36,6 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "start:debugging": "npm start -- --bridge chrome-debugging",
-    "start:extension": "npm start -- --bridge extension",
     "dev:debugging": "npm run dev -- --bridge chrome-debugging"
   },
   "dependencies": {
@@ -56,7 +53,6 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@modelcontextprotocol/client": "2.3.1",
-    "@types/chrome": "^0.3.4",
     "@types/node": "^22.0.0",
     "esbuild": "^0.28.2",
     "eslint": "10.12.0",
