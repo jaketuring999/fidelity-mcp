@@ -11,6 +11,8 @@
     "dist/**/*.js",
     "dist/extension/manifest.json",
     "docs/architecture.md",
+    "docs/setup.md",
+    "docs/tools.md",
     "docs/development.md",
     "docs/security.md",
     "docs/fidelity/README.md",
